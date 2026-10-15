@@ -3,7 +3,8 @@
 # probably of node-pty while a terminal closes) with no test failing. A crash takes down only the file its worker was running, and
 # vitest names that file; so those files, and only those, run again, up to three more times. A test that fails fails the job at once;
 # a file that still crashes after the last attempt fails it too. If the crashed files cannot be told from the log (the count does not
-# add up), the whole suite runs once more, as before.
+# add up), the whole suite runs once more, as before. Each crash is also written as a `CI-CRASH: attempt <n>: <files>` line, which
+# `npm run ci-crash-stats` reads from the logs of past runs.
 set +e
 # Two workers at a time: the crashes and the 20 s hangs come with several terminals starting and closing together on the shared runner
 # (the system ConPTY instead of the bundled one did not help). CI_TESTS_WORKERS changes the number.
@@ -31,6 +32,7 @@ code=${PIPESTATUS[0]}
 if has_failed_tests "$log" || ! crashed "$log"; then exit "$code"; fi
 
 files=$(crashed_files "$log")
+echo "CI-CRASH: attempt 0: $(echo $files)"
 total=$(files_total "$log")
 passed=$(files_passed "$log")
 n=$(echo "$files" | grep -c .)
@@ -48,6 +50,7 @@ for attempt in 1 2 3; do
   [ "$code" -eq 0 ] && exit 0
   if has_failed_tests "$log" || ! crashed "$log"; then exit "$code"; fi
   files=$(crashed_files "$log")
+  echo "CI-CRASH: attempt $attempt: $(echo $files)"
   [ -z "$files" ] && exit "$code"
 done
 echo "::error::these files still crash a worker after three more tries: $(echo $files)"

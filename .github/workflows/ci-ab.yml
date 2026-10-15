@@ -1,0 +1,69 @@
+# A manual experiment, not part of the checks: does skipping `pty.kill()` after a successful `taskkill` stop the native worker crashes?
+# Runs the full suite `runs` times for each variant on the Windows runner (A = as shipped, B = pty.kill() skipped) and writes the
+# CI-CRASH lines of each job to its summary. Count them with the job summaries; about ten runs per variant are needed to tell (see PITFALLS, CI).
+# Start it from the Actions tab (workflow_dispatch). The patch for B is applied on the runner only; nothing is written to the repository.
+name: ci-ab
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Runs per variant
+        default: '5'
+
+permissions: {}
+
+jobs:
+  suite:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [A, B]
+        run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - name: Skip the runs above the requested number
+        id: gate
+        shell: bash
+        run: |
+          if [ "${{ matrix.run }}" -gt "${{ inputs.runs }}" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.skip != '1'
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.gate.outputs.skip != '1'
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+        if: steps.gate.outputs.skip != '1'
+
+      - run: npm run build
+        if: steps.gate.outputs.skip != '1'
+
+      - name: Variant B, skip pty.kill() after taskkill
+        if: steps.gate.outputs.skip != '1' && matrix.variant == 'B'
+        shell: bash
+        run: |
+          f=src/server/pty/pty-manager.ts
+          sed -i 's|^    try { e.pty.kill(); } catch { /\* already gone \*/ }$|    // variant B: pty.kill() skipped|' "$f"
+          grep -q 'variant B: pty.kill() skipped' "$f"
+
+      - name: Tests
+        if: steps.gate.outputs.skip != '1'
+        shell: bash
+        run: |
+          bash scripts/ci-tests.sh 2>&1 | tee suite.log
+          code=${PIPESTATUS[0]}
+          { echo "### variant ${{ matrix.variant }}, run ${{ matrix.run }}"; grep 'CI-CRASH' suite.log || echo "no crash"; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
