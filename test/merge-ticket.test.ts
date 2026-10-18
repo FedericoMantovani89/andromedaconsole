@@ -219,9 +219,9 @@ describe('mergeTicket', () => {
     await approvedTicket('a-job', { 'src/a.js': 'a\n' });
     finishFails = true;
     const r = await svc.mergeTicket('a-job');
-    expect(r).toMatchObject({ status: 'merged', cleanup: 'incomplete' });
+    expect(r).toMatchObject({ status: 'merged', cleanup: { incomplete: ['session'] } });
     expect(tickets.get('a-job')!.status).toBe('merged');
-    expect(main.join('\n')).toMatch(/clean/i);
+    expect(main.join('\n')).toMatch(/not cleaned up: .*session/i);
   });
   it('the remote branch of a merged ticket is kept (SPEC 9.7)', async () => {
     const a = await approvedTicket('a-job', { 'src/a.js': 'a\n' });

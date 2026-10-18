@@ -180,7 +180,9 @@ const TOOL_SPECS = {
     },
   },
   merge_ticket: {
-    description: 'Merge an approved ticket into the project branch (one at a time, never forced). A conflict or red tests after the merge send the ticket back to its author. Returns { status: "merged" | "conflict" | "tests_failed" | "refused" }.',
+    description: 'Merge an approved ticket into the project branch (one at a time, never forced). A conflict or red tests after the merge send the ticket back to its author. '
+      + 'Calling it again for the same ticket is safe: it joins the merge that is running, and a merged ticket answers "merged" with the same sha. '
+      + 'Returns { status: "merged" | "conflict" | "tests_failed" | "refused" }; "merged" may carry cleanup.incomplete, what was left behind (session, worktree, branch).',
     inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'The ticket (agent) name' } }, required: ['name'] },
   },
   propose_release: {
@@ -386,19 +388,25 @@ function toolBody(/** @type {string} */ name, /** @type {Ev} */ e) {
   return {};
 }
 
+/** The tools whose work outlasts a request, and what to say when the console stops answering while it may still be going. */
+const LONG_TOOLS = /** @type {Record<string, string>} */ ({
+  step_done: 'The console did not answer. The validation may still be running: call step_done again with the same n.',
+  merge_ticket: 'The console did not answer. The merge may still be running: call merge_ticket again.',
+});
+
 /**
- * The validation can take tens of minutes and the host drops a request that stays open that long. The console runs it on its own and
- * answers each request within seconds with "running"; asking again joins the same run. A lost answer is asked again too.
+ * A validation or a merge can take tens of minutes and the host drops a request that stays open that long. The console runs it on its
+ * own and answers each request within seconds with "running"; asking again joins the same run. A lost answer is asked again too.
  */
-async function stepDoneUntilEnd(/** @type {Engine} */ $, /** @type {Ev} */ e) {
+async function untilEnd(/** @type {Engine} */ $, /** @type {string} */ name, /** @type {Ev} */ e) {
   let failures = 0;
   for (;;) {
-    const r = await call($, 'POST', '/v1/tools/step_done', toolBody('step_done', e));
+    const r = await call($, 'POST', '/v1/tools/' + name, toolBody(name, e));
     if (r.json && r.json.status !== 'running') return { result: JSON.stringify(r.json) };
     if (r.json) failures = 0;
     else {
       failures += 1;
-      if (failures >= MAX_CONSOLE_FAILURES) return { result: 'The console did not answer. The validation may still be running: call step_done again with the same n.' };
+      if (failures >= MAX_CONSOLE_FAILURES) return { result: LONG_TOOLS[name] };
       await $.clock.sleep(1000);
     }
   }
@@ -411,7 +419,7 @@ async function onConsoleTool(/** @type {Engine} */ $, /** @type {string} */ name
       const a = await askConsole($, String(e.question), Array.isArray(e.options) ? e.options.map(String) : undefined, false);
       return { result: a.ok ? 'The user answered: ' + a.answer : 'No answer: ' + a.reason };
     }
-    if (name === 'step_done') return await stepDoneUntilEnd($, e);
+    if (Object.prototype.hasOwnProperty.call(LONG_TOOLS, name)) return await untilEnd($, name, e);
     const r = await call($, 'POST', '/v1/tools/' + name, toolBody(name, e));
     if (!r.json) return { result: 'The console did not answer.' };
     return { result: JSON.stringify(r.json) };

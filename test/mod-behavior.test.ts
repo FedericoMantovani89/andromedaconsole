@@ -291,6 +291,29 @@ it('a ticket tool called while the console is unreachable says so instead of thr
   const done = await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 1 });
   expect(done.result).toContain('call step_done again with the same n');
 });
+it('merge_ticket keeps asking while the console says "running" and returns the final answer', async () => {
+  const { find } = await loadMod();
+  let n = 0;
+  const f = fake$({
+    fetch: (url) => {
+      if (!url.includes('/v1/tools/merge_ticket')) return { ok: true, text: '{}' };
+      n += 1;
+      if (n === 2) return new Error('fetch timeout');
+      return { ok: true, text: JSON.stringify(n < 4 ? { status: 'running' } : { status: 'merged', sha: 'abc' }) };
+    },
+  });
+  await find('session.start')(f.$, {}, next);
+  const out = await find('tool.call', 'mcp__console-mod__merge_ticket')(f.$, { name: 'fix-login' });
+  expect(out).toEqual({ result: JSON.stringify({ status: 'merged', sha: 'abc' }) });
+  expect(n).toBe(4);
+});
+it('merge_ticket with the console unreachable says the merge may still be running and to call it again', async () => {
+  const { find } = await loadMod();
+  const f = fake$({ fetch: (url) => (url.includes('/v1/tools/') ? new Error('ECONNREFUSED') : { ok: true, text: '{}' }) });
+  await find('session.start')(f.$, {}, next);
+  const out = await find('tool.call', 'mcp__console-mod__merge_ticket')(f.$, { name: 'fix-login' });
+  expect(out.result).toBe('The console did not answer. The merge may still be running: call merge_ticket again.');
+});
 
 // ---- the guard hook (Phase 3, Task 5) ----
 const GUARDED = ['Bash', 'PowerShell', 'Write', 'Edit', 'NotebookEdit', 'Read', 'Grep', 'Glob'];

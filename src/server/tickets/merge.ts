@@ -1,11 +1,13 @@
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { errorMessage } from '../../shared/guards';
 import type { Translate } from '../../shared/i18n';
 import type { AgentGit } from '../agents/registry';
 import { git } from '../git/git';
 import { worktreesDirFor } from '../git/worktree';
 import { changedFiles, ensureProjectWorktree, mergeIntoProject, resetTo, startMergeForAuthor, withProjectLock } from '../git/merge';
 import { commonDir, removeWorktree } from '../git/worktree';
+import { boundedWait } from './bounded-wait';
 import { squashMessage } from './report';
 import type { TicketStore } from './store';
 import { runDirect, type TestRunner } from './test-queue';
@@ -37,11 +39,17 @@ export interface MergeDeps {
   finishAgent(slug: string): Promise<void>;
 }
 
+/** What the cleanup after a merge could not remove (SPEC 9.7), in this order. */
+export const CLEANUP_ITEMS = ['session', 'worktree', 'branch'] as const;
+export type CleanupItem = typeof CLEANUP_ITEMS[number];
+
 export type MergeResult =
-  | { status: 'merged'; sha: string; cleanup?: 'incomplete' }
+  | { status: 'merged'; sha: string; cleanup?: { incomplete: CleanupItem[] } }
   | { status: 'conflict'; files: string[] }
   | { status: 'tests_failed'; tail: string }
-  | { status: 'refused'; code: 'not_approved' | 'no_worktree' | 'author_moved' | 'project_branch_checked_out' | 'git_failed'; detail?: string };
+  | { status: 'refused'; code: 'not_approved' | 'no_worktree' | 'author_moved' | 'project_branch_checked_out' | 'git_failed'; detail?: string }
+  /** The bounded wait ended before the merge did: the merge goes on, ask again. */
+  | { status: 'running' };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -52,19 +60,56 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class MergeService {
   private chain: Promise<unknown> = Promise.resolve();
   private active = 0;
+  private readonly jobs = new Map<string, Promise<MergeResult>>();
+  /** The last answer of each ticket's job and the ticket status it left behind: a repeated call gets it while that status holds. */
+  private readonly outcomes = new Map<string, { result: MergeResult; status: string }>();
 
   constructor(private readonly d: MergeDeps) {}
 
-  mergeTicket(slug: string): Promise<MergeResult> {
-    const locked = () => withProjectLock(this.repoOf(this.d.worktreeOf(slug)), () => this.merge(slug));
-    this.active += 1;
-    const run = this.chain.then(locked, locked);
-    this.chain = run.catch(() => undefined);
-    return run.finally(() => { this.active -= 1; });
+  /**
+   * Merges a ticket as a job detached from the call (git merge, the project's tests and the cleanup can outlast an HTTP request). With
+   * `waitMs` the call answers `running` when the wait ends first; a repeated call joins the job, and a ticket already merged answers
+   * `merged` with its sha from the ticket itself, without git (so it is also true after a restart).
+   */
+  mergeTicket(slug: string, opts: { waitMs?: number } = {}): Promise<MergeResult> {
+    const job = this.jobs.get(slug) ?? this.answered(slug) ?? this.start(slug);
+    return opts.waitMs === undefined ? job : boundedWait(job, opts.waitMs, (): MergeResult => ({ status: 'running' }));
   }
 
   /** Merges asked for and not finished yet (running or waiting for their turn). */
   inFlight(): number { return this.active; }
+
+  /** The answer the ticket already holds: merged, or the last job's answer while the ticket is still where that job left it. */
+  private answered(slug: string): Promise<MergeResult> | undefined {
+    const ticket = this.d.tickets.get(slug);
+    const kept = this.outcomes.get(slug);
+    if (ticket?.status === 'merged' && ticket.mergedSha) {
+      const same = kept?.result.status === 'merged' && kept.result.sha === ticket.mergedSha;
+      return Promise.resolve(same ? kept.result : { status: 'merged', sha: ticket.mergedSha });
+    }
+    // An approved ticket is always merged again: a refusal (the author moved, git failed) may be gone by now.
+    if (kept && ticket && ticket.status !== 'approved' && ticket.status === kept.status) return Promise.resolve(kept.result);
+    this.outcomes.delete(slug);
+    return undefined;
+  }
+
+  private start(slug: string): Promise<MergeResult> {
+    const locked = () => withProjectLock(this.repoOf(this.d.worktreeOf(slug)), () => this.merge(slug));
+    this.active += 1;
+    const run = this.chain.then(locked, locked);
+    this.chain = run.catch(() => undefined);
+    const job = run
+      .catch((e: unknown): MergeResult => ({ status: 'refused', code: 'git_failed', detail: errorMessage(e) })) // nobody may be waiting: never a stray rejection
+      .then((result) => {
+        this.jobs.delete(slug);
+        this.active -= 1;
+        const status = this.d.tickets.get(slug)?.status;
+        if (status) this.outcomes.set(slug, { result, status });
+        return result;
+      });
+    this.jobs.set(slug, job);
+    return job;
+  }
 
   /** The repository of an agent: its own when it has one, else the project folder. */
   private repoOf(a: { repo?: string } | undefined): string { return a?.repo ?? this.d.root; }
@@ -124,9 +169,11 @@ export class MergeService {
   private async completeMerge(slug: string, author: AgentGit, sha: string): Promise<MergeResult> {
     this.d.tickets.move(slug, 'merged', { mergedSha: sha });
     try { this.d.merged?.(slug); } catch { /* the central run is a courtesy: the merge is done */ }
-    const cleanup = await this.cleanUp(slug, author);
-    this.d.notifyMain(`Ticket "${slug}" was merged into project/${this.d.project} (${sha.slice(0, 7)}).${cleanup ? ' Its session or folder could not be cleaned up completely; the work is safe on the project branch.' : ''} Next: merge the other approved tickets, then propose_release.`);
-    return { status: 'merged', sha, ...(cleanup ? { cleanup: 'incomplete' as const } : {}) };
+    const left = await this.cleanUp(slug, author);
+    const what: Record<CleanupItem, string> = { session: 'the agent\'s session', worktree: `its folder ${author.worktree}`, branch: `its local branch ${author.branch}` };
+    const leftText = left.length > 0 ? ` Not cleaned up: ${left.map((i) => what[i]).join(', ')}; the work is safe on the project branch.` : '';
+    this.d.notifyMain(`Ticket "${slug}" was merged into project/${this.d.project} (${sha.slice(0, 7)}).${leftText} Next: merge the other approved tickets, then propose_release.`);
+    return { status: 'merged', sha, ...(left.length > 0 ? { cleanup: { incomplete: left } } : {}) };
   }
 
   /** The console's own commit for this ticket (its `Ticket:` and `Agent:` trailers) if it is already on the project branch. */
@@ -175,22 +222,23 @@ export class MergeService {
     return { status: 'tests_failed', tail };
   }
 
-  /** After the merge (SPEC 9.7): end the session, remove the worktree and the local branch; the remote branch stays. Returns true when something is left. */
-  private async cleanUp(slug: string, author: AgentGit): Promise<boolean> {
+  /** After the merge (SPEC 9.7): end the session, remove the worktree and the local branch; the remote branch stays. Returns what is left. */
+  private async cleanUp(slug: string, author: AgentGit): Promise<CleanupItem[]> {
     const repo = this.repoOf(author);
-    let incomplete = false;
-    try { await this.d.finishAgent(slug); } catch { incomplete = true; }
+    const left = new Set<CleanupItem>();
+    try { await this.d.finishAgent(slug); } catch { left.add('session'); }
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         await removeWorktree(repo, author.worktree);
         break;
       } catch {
-        incomplete = attempt === 4 || incomplete; // the folder may still be held for a moment by the process that just ended
-        await sleep(300);
+        if (attempt === 4) left.add('worktree'); // the folder may still be held for a moment by the process that just ended
+        else await sleep(300);
       }
     }
-    await git(repo, ['branch', '-D', author.branch]);
-    try { rmSync(join(await commonDir(repo), 'console-hooks', slug), { recursive: true, force: true }); } catch { incomplete = true; }
-    return incomplete;
+    const branch = await git(repo, ['branch', '-D', author.branch]);
+    if (branch.code !== 0 && (await git(repo, ['rev-parse', '-q', '--verify', `refs/heads/${author.branch}`])).code === 0) left.add('branch');
+    try { rmSync(join(await commonDir(repo), 'console-hooks', slug), { recursive: true, force: true }); } catch { left.add('worktree'); } // the worktree's push hook
+    return CLEANUP_ITEMS.filter((i) => left.has(i));
   }
 }

@@ -8,6 +8,7 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+- Fixed: `merge_ticket` no longer ends in "The console did not answer." while the merge goes on: the merge runs as a job of its own, each request waits at most 15 s and answers `running`, the mod asks again, a repeated call for a merged ticket answers `merged` with the same sha without touching git, and a partial cleanup answers `cleanup.incomplete` (session, worktree, branch) and the notice to the main names what was left.
 - Fixed: a `bad_request` from a console tool (`send_message`, `merge_ticket`, `spawn_agent` and the others) now carries a `detail` sentence that names the missing or wrong field (for example `in_reply_to is required for type "answer"`); `code` is unchanged.
 - Added: `list_agents` shows the main the release request that waits for the user (`release: { id, status: 'pending' }`), so it neither asks again nor forgets it.
 - Tests: a pending release confirmation is pinned to raise one desktop notice titled "Release to approve" (the queue badge and notice already existed).

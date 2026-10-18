@@ -2,8 +2,11 @@ import type { Context } from '../../http';
 import { badRequest } from '../../tool-errors';
 import type { ProjectContainer } from '../services';
 
-/** How long one step_done request waits for the step (the validation can take tens of minutes): the host cuts a request that stays open for about a minute. */
-const STEP_DONE_WAIT_MS = 15_000;
+/**
+ * How long one step_done or merge_ticket request waits for its job (a validation or the tests after a merge can take tens of minutes):
+ * the host cuts a request that stays open for about a minute. The mod asks again on "running".
+ */
+const TOOL_WAIT_MS = 15_000;
 
 /** The console tools of a ticket's life: steps, review, recovery, release and merge. */
 export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checklist_set' | 'step_done' | 'report_blocked' | 'ticket_report' | 'request_review' | 'send_back_ticket' | 'review_verdict' | 'propose_release' | 'release_answer' | 'start_recovery' | 'recovery_report' | 'merge_ticket'> {
@@ -26,7 +29,7 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
       if (typeof b.n !== 'number' || !Number.isInteger(b.n)) return badRequest('n must be the whole number of the step');
       return steps.stepDone(slug, {
         n: b.n, note: typeof b.note === 'string' ? b.note : undefined, skip: b.skip === true,
-      }, { waitMs: STEP_DONE_WAIT_MS }); // longer than this and the host drops the request; the mod asks again on "running"
+      }, { waitMs: TOOL_WAIT_MS });
     },
     report_blocked: async (slug, body) => {
       const reason = (body as { reason?: unknown } | null)?.reason;
@@ -87,7 +90,7 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
     merge_ticket: async (_slug, body) => {
       const name = (body as { name?: unknown } | null)?.name;
       if (typeof name !== 'string' || name === '') return badRequest('name is required');
-      return merge.mergeTicket(name);
+      return merge.mergeTicket(name, { waitMs: TOOL_WAIT_MS });
     },
   };
 }

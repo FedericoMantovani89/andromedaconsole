@@ -4,6 +4,7 @@ import { commitStep } from '../git/commit';
 import { git } from '../git/git';
 import { pushBranch } from '../git/push';
 import { findMarkers } from '../requests/markers';
+import { boundedWait } from './bounded-wait';
 import { validateChecklist, type ChecklistError, type Step } from './checklist';
 import type { TicketStore } from './store';
 import { runDirect, type TicketTestDeps } from './test-queue';
@@ -108,14 +109,12 @@ export class StepService {
     if (opts.waitMs === undefined) {
       try { return await job.promise; } finally { job.waiters -= 1; }
     }
-    let timer: NodeJS.Timeout | undefined;
     try {
-      return await Promise.race([
-        job.promise,
-        new Promise<StepRunning>((resolve) => { timer = setTimeout(() => { const queue = this.d.queuePosition?.(slug); resolve({ status: 'running', n: o.n, ...(queue !== undefined ? { queue } : {}) }); }, opts.waitMs); }),
-      ]);
+      return await boundedWait(job.promise, opts.waitMs, (): StepRunning => {
+        const queue = this.d.queuePosition?.(slug);
+        return { status: 'running', n: o.n, ...(queue !== undefined ? { queue } : {}) };
+      });
     } finally {
-      clearTimeout(timer);
       job.waiters -= 1;
     }
   }
