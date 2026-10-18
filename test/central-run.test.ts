@@ -13,7 +13,7 @@ afterEach(() => removeDir(dir));
 const ok: TestRun = { ok: true, code: 0, tail: '' };
 const red = (tail: string): TestRun => ({ ok: false, code: 1, tail });
 
-interface Rig { c: CentralRun; tickets: CentralTicket[]; runs: { command: string; cwd: string; label: string; heavy: boolean }[]; told: string[]; asked: { text: string; payload: any; options: string[]; answer: (a: string) => void }[]; lockedDuringRun: boolean[]; main: string[]; marks: Map<string, unknown>; setTip(t: string): void; result: { v: TestRun }; reruns: string[]; merging: { n: number } }
+interface Rig { c: CentralRun; deps: CentralDeps; tickets: CentralTicket[]; runs: { command: string; cwd: string; label: string; heavy: boolean }[]; told: string[]; asked: { text: string; payload: any; options: string[]; answer: (a: string) => void }[]; lockedDuringRun: boolean[]; main: string[]; marks: Map<string, unknown>; setTip(t: string): void; result: { v: TestRun }; reruns: string[]; merging: { n: number } }
 
 function rig(o: { tickets: CentralTicket[]; touched?: Record<string, string[]>; alive?: boolean; mergeCommand?: string; rerun?: (sha: string) => boolean | undefined; command?: string | undefined }): Rig {
   const tickets = o.tickets;
@@ -48,7 +48,7 @@ function rig(o: { tickets: CentralTicket[]; touched?: Record<string, string[]>; 
     notifyMain: (text) => { main.push(text); },
     askUser: (q, answer) => { asked.push({ ...q, answer }); },
   };
-  return { c: new CentralRun(deps), tickets, runs, told, asked, lockedDuringRun, main, marks, setTip: (t) => { tip = t; }, result, reruns, merging };
+  return { c: new CentralRun(deps), deps, tickets, runs, told, asked, lockedDuringRun, main, marks, setTip: (t) => { tip = t; }, result, reruns, merging };
 }
 
 const merged = (slug: string, sha: string, extra: Partial<CentralTicket> = {}): CentralTicket => ({ slug, status: 'merged', mergedSha: sha, ...extra });
@@ -96,6 +96,15 @@ describe('CentralRun', () => {
     await r.c.runNow();
     expect(r.runs).toHaveLength(0);
     expect(r.c.record('')).toBeUndefined();
+  });
+
+  it("asks for the command of the repository's project worktree, so a folder of several repositories finds each one's own", async () => {
+    const r = rig({ tickets: [merged('a', 'sa')] });
+    const asked: (string | undefined)[] = [];
+    const c = new CentralRun({ ...r.deps, command: (cwd) => { asked.push(cwd); return cwd === 'P' ? 'mvn test' : undefined; } });
+    await c.runNow();
+    expect(asked).toEqual(['P']);
+    expect(r.runs).toEqual([{ command: 'mvn test', cwd: 'P', label: 'central:p', heavy: true }]);
   });
 
   it('runs the suite on a checkout of the tip, never while holding the project lock (a merge is not blocked by it)', async () => {

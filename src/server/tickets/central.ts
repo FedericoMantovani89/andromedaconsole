@@ -48,10 +48,10 @@ export interface CentralDeps {
   /** Told when the record file could not be read and was set aside. */
   report?: StateReport;
   tickets: { list(): CentralTicket[]; setCentral(slug: string, mark: CentralMark): unknown };
-  /** The `release` (full) command, or none when the tests are off. */
-  command(): string | undefined;
-  /** The command a merge runs after merging: when it is the release command, the last merge already tested the tip. */
-  mergeCommand?(): string | undefined;
+  /** The `release` (full) command for a run in `cwd` (the repository's project worktree), or none when the tests are off. */
+  command(cwd?: string): string | undefined;
+  /** The command a merge runs after merging in `cwd`: when it is the release command, the last merge already tested the tip. */
+  mergeCommand?(cwd?: string): string | undefined;
   timeoutMs(): number;
   /** How long after a merge the run waits for the next one (the quiet time that makes a batch). */
   settleMs: number;
@@ -138,22 +138,23 @@ export class CentralRun {
   }
 
   private async once(): Promise<void> {
-    const command = this.d.command()?.trim();
-    if (!command) return;
     const groups = new Map<string, CentralTicket[]>();
     for (const t of this.d.tickets.list()) {
       if (t.status !== 'merged' || t.central?.checkedTip) continue;
       groups.set(t.repo ?? '', [...(groups.get(t.repo ?? '') ?? []), t]);
     }
     for (const [rel, batch] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-      try { await this.oneRepo(rel, batch, command); } catch { /* one repository failing to run must not stop the others or the console */ }
+      try { await this.oneRepo(rel, batch); } catch { /* one repository failing to run must not stop the others or the console */ }
     }
   }
 
-  private async oneRepo(rel: string, batch: CentralTicket[], command: string): Promise<void> {
+  private async oneRepo(rel: string, batch: CentralTicket[]): Promise<void> {
     // The project lock is held only to read the tip: the suite runs on a detached checkout of that commit, so merges are never blocked by it.
     const prep = await this.d.git.lock(rel, () => this.d.git.prepare(rel));
     if (!prep) return;
+    // Asked in the repository's project worktree: in a folder of several repositories each one detects its own command.
+    const command = this.d.command(prep.path)?.trim();
+    if (!command) return;
     const tip = prep.tip;
     const before = this.record(rel);
     if (before && before.tip === tip && before.command === command) return; // this tip was already checked
@@ -162,7 +163,7 @@ export class CentralRun {
     const markAll = (): void => { for (const t of ordered) this.d.tickets.setCentral(t.slug, { checkedTip: tip }); };
 
     // With one test command for every moment, the merge of the last ticket already ran the whole suite on exactly this tip.
-    const mergeCommand = this.d.mergeCommand?.()?.trim();
+    const mergeCommand = this.d.mergeCommand?.(prep.path)?.trim();
     if (mergeCommand === command && ordered.length > 0 && ordered[ordered.length - 1]!.mergedSha === tip) {
       this.save(rel, { ...rec, reusedMerge: true });
       markAll();

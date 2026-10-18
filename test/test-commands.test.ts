@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ProjectStore } from '../src/server/project-store';
-import { testCommandFor } from '../src/server/test-commands';
+import { detectedTestCommands, testCommandFor } from '../src/server/test-commands';
 import { saveTemplate } from '../src/server/templates/save';
 import { findTemplate } from '../src/server/templates/load';
 import { applyTemplate } from '../src/server/templates/apply';
@@ -51,6 +51,58 @@ it('testCommandFor: the moment key, else testCommand, else the detected one; dis
   expect(pick('ticket', { testsDisabled: true })).toBeUndefined();
   expect(pick('release', { testsDisabled: true })).toBeUndefined();
   expect(testCommandFor('ticket', { project: () => { throw new Error('damaged'); }, detected })).toBe('detected'); // a damaged project.json: as with no settings
+});
+
+describe('testCommandFor in the folder a run happens in (a project folder that holds several repositories)', () => {
+  /** `abc-website` holds `abc-be` (pom.xml) and `abc-fe` (package.json with a test script); the folder itself has neither. */
+  const multi = (): { root: string; be: string; fe: string } => {
+    const root = folder();
+    const be = join(root, 'abc-be');
+    const fe = join(root, 'abc-fe');
+    mkdirSync(be);
+    mkdirSync(fe);
+    writeFileSync(join(be, 'pom.xml'), '<project/>');
+    writeFileSync(join(fe, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
+    return { root, be, fe };
+  };
+  const nothingSaved = (): Record<string, never> => ({});
+
+  it('detects the command of the repository it runs in, and nothing in the bare project folder', () => {
+    const { root, be, fe } = multi();
+    const d = { project: nothingSaved, detected: detectedTestCommands(root) };
+    expect(testCommandFor('ticket', d, be)).toMatch(/mvn test$/);
+    expect(testCommandFor('merge', d, fe)).toBe('npm test');
+    expect(testCommandFor('ticket', d)).toBeUndefined();
+  });
+  it('a project folder that is the repository gives the same command with or without the folder', () => {
+    const root = folder();
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
+    const d = { project: nothingSaved, detected: detectedTestCommands(root) };
+    expect(testCommandFor('ticket', d)).toBe('npm test');
+    expect(testCommandFor('ticket', d, root)).toBe('npm test');
+  });
+  it('with the tests inhibited there is none, in whichever folder', () => {
+    const { root, be } = multi();
+    const d = { project: () => ({ testsDisabled: true, testCommand: 'npm test' }), detected: detectedTestCommands(root) };
+    expect(testCommandFor('ticket', d, be)).toBeUndefined();
+    expect(testCommandFor('release', d)).toBeUndefined();
+  });
+  it("the project's own command wins over the detected one", () => {
+    const { root, be } = multi();
+    const d = { project: () => ({ testCommand: 'my test', testCommands: { merge: 'smoke' } }), detected: detectedTestCommands(root) };
+    expect(testCommandFor('ticket', d, be)).toBe('my test');
+    expect(testCommandFor('merge', d, be)).toBe('smoke');
+  });
+  it('keeps each folder for 5 s, then reads it again', () => {
+    const { root, be } = multi();
+    let now = 1_000;
+    const detected = detectedTestCommands(root, () => now);
+    expect(detected(be)).toMatch(/mvn test$/);
+    rmSync(join(be, 'pom.xml'));
+    expect(detected(be)).toMatch(/mvn test$/); // within 5 s: the kept answer
+    now += 5_001;
+    expect(detected(be)).toBeUndefined();
+  });
 });
 
 it('PUT /api/project sets, echoes, merges and clears testCommands; a bad one changes nothing', async () => {

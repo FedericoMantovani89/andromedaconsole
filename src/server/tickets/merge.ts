@@ -18,7 +18,8 @@ export interface MergeDeps {
   root: string;
   project: string;
   worktreeOf(slug: string): AgentGit | undefined;
-  testCommand(): string | undefined;
+  /** The command for a run in `cwd`: the repository's project worktree, where the merge is tested. */
+  testCommand(cwd?: string): string | undefined;
   /** The user switched the tests off for this project (the commit message then says so instead of "n/a"). */
   testsDisabled?(): boolean;
   testTimeoutMs(): number;
@@ -132,7 +133,7 @@ export class MergeService {
     const adopted = await this.alreadyMerged(project.path, slug);
     if (adopted) {
       // The tests of the merge may never have run (that is what a crash there looks like): run them before accepting it.
-      const adoptedCommand = this.d.testCommand()?.trim();
+      const adoptedCommand = this.d.testCommand(project.path)?.trim();
       if (adoptedCommand) {
         const run = await (this.d.runTests ?? runDirect)({ cwd: project.path, command: adoptedCommand, timeoutMs: this.d.testTimeoutMs(), owner: slug });
         if (!run.ok) {
@@ -155,7 +156,7 @@ export class MergeService {
       return { status: 'refused', code: 'git_failed', detail: merged.detail };
     }
 
-    const command = this.d.testCommand()?.trim();
+    const command = this.d.testCommand(project.path)?.trim();
     if (command) {
       const run = await (this.d.runTests ?? runDirect)({ cwd: project.path, command, timeoutMs: this.d.testTimeoutMs(), owner: slug });
       if (!run.ok) {

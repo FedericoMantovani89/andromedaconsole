@@ -119,7 +119,7 @@ export async function recoveryFacts(d: Pick<RecoveryDeps, 'tickets' | 'ledger' |
   if (!wt) throw new Error('no_worktree');
   const log = await git(wt.worktree, ['log', '-n', '50', '--format=%h %s', `project/${d.project}..HEAD`]);
   const stat = await git(wt.worktree, ['diff', '--stat', `project/${d.project}...HEAD`]);
-  const command = d.testCommand()?.trim();
+  const command = d.testCommand(wt.worktree)?.trim();
   const run = command ? await (d.runTests ?? runDirect)({ cwd: wt.worktree, command, timeoutMs: d.testTimeoutMs(), owner: slug }) : undefined;
 
   const entries = d.ledger.entries({ agent: slug, scope: { project: d.project, root: d.root } });

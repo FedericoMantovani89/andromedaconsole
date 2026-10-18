@@ -15,7 +15,8 @@ export interface ReleaseDeps {
   /** The project folder. Where `main` lives when the folder is a repository; a ticket with a `repo` releases that sub-folder's repository instead. */
   root: string;
   project: string;
-  testCommand(): string | undefined;
+  /** The command for a run in `cwd`: the repository's project worktree (the proposal), or the repository's checkout (after the merge into main). */
+  testCommand(cwd?: string): string | undefined;
   testTimeoutMs(): number;
   /** Runs a test command through the machine's test queue (default: straight away). */
   runTests?: TestRunner;
@@ -185,7 +186,7 @@ export class ReleaseService {
     if (!project.ok) return { refusal: { status: 'refused', code: project.code, detail: project.detail } };
     const tip = (await git(project.path, ['rev-parse', 'HEAD'])).stdout.trim();
 
-    const command = this.d.testCommand()?.trim();
+    const command = this.d.testCommand(project.path)?.trim();
     let tests: { ok: boolean; command: string; tail: string } | undefined;
     if (command) {
       const reused = this.d.greenFor?.(rel, tip, command) === true;
@@ -318,7 +319,7 @@ export class ReleaseService {
         return { code: 'release.conflict', text: `the project branch does not merge cleanly into ${target}.${undone ? ' Nothing was pushed and the checkout was left as it was.' : ` Your own edits made it impossible to undo completely: check ${target}.`}` };
       }
       // A fast-forward leaves the target with exactly the tree the proposal already tested on this tip: only a real merge is new code to test.
-      const command = fastForward ? undefined : this.d.testCommand()?.trim();
+      const command = fastForward ? undefined : this.d.testCommand(root)?.trim();
       if (command) {
         const run = await (this.d.runTests ?? runDirect)({ cwd: root, command, timeoutMs: this.d.testTimeoutMs(), owner: `release:${this.d.project}` });
         if (!run.ok) {

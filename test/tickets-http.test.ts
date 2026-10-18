@@ -2,14 +2,16 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { autoClose, usePipePty, bootServer, modEvent, mod, req, state, ui, type Running } from './helpers';
-import { branchesOf, gitSync, makeRepo, type TestRepo, removeDir, worktreePathFor } from './git-helpers';
+import { branchesOf, gitSync, makeMultiRepo, makeRepo, type MultiRepo, type TestRepo, removeDir, worktreePathFor } from './git-helpers';
 import { AGENT_TOOLS } from '../src/server/agents/spawn';
+import { worktreePathFor as multiWorktreePathFor, worktreesDirFor } from '../src/server/git/worktree';
 
 // Real git and real processes: slow on a busy machine, so these tests get a longer budget.
 vi.setConfig({ testTimeout: 60_000 });
 
 const repos: TestRepo[] = [];
-afterEach(() => { while (repos.length) removeDir(repos.pop()!.base); });
+const made: MultiRepo[] = [];
+afterEach(() => { while (repos.length) removeDir(repos.pop()!.base); while (made.length) removeDir(made.pop()!.base); });
 autoClose();
 usePipePty(); // this file never reads the terminal: its sessions run on plain pipes
 
@@ -105,6 +107,31 @@ it('without a test command the validation step cannot close', async () => {
   await tool(s, 'fix-login', 'checklist_set', { items: ITEMS });
   for (let n = 1; n <= 4; n++) await tool(s, 'fix-login', 'step_done', { n, note: 'a decent note for this step' });
   expect((await tool(s, 'fix-login', 'step_done', { n: 5 })).body).toMatchObject({ status: 'refused', code: 'no_test_command' });
+});
+it("in a project folder of several repositories, with nothing saved, the validation runs the command detected in the agent's repository", async () => {
+  const m = makeMultiRepo(['abc-fe', 'abc-be'], { remote: true });
+  made.push(m);
+  // abc-be is a Maven project with its wrapper: the detected command is `mvnw.cmd test` (`./mvnw test` elsewhere), and the wrapper writes what it was given.
+  const be = m.repos['abc-be']!.repo;
+  writeFileSync(join(be, 'pom.xml'), '<project/>');
+  writeFileSync(join(be, 'mvnw.cmd'), '@echo %*> validated.txt\r\n');
+  writeFileSync(join(be, 'mvnw'), '#!/bin/sh\necho "$@" > validated.txt\n', { mode: 0o755 });
+  gitSync(be, 'add', '-A');
+  gitSync(be, 'commit', '-q', '-m', 'maven');
+  const s = await bootServer({ projectRoot: m.root, config: { git: { worktrees: true } } });
+  expect((await state(s)).project.testCommand).toBeUndefined();
+  for (const [name, repo] of [['be-job', 'abc-be'], ['fe-job', 'abc-fe']] as const) {
+    expect((await mod(s, 'shop-api', '/v1/tools/spawn_agent', 'POST', { name, profile: 'developer', goal: 'make it work', repo })).body.status).toBe('started');
+    await tool(s, name, 'checklist_set', { items: ITEMS });
+    for (let n = 1; n <= 4; n++) expect((await tool(s, name, 'step_done', { n, note: 'a decent note for this step' })).body.status, `${name} step ${n}`).toBe('closed');
+  }
+  expect((await tool(s, 'be-job', 'step_done', { n: 5 })).body).toMatchObject({ status: 'closed', n: 5 });
+  const wt = multiWorktreePathFor(be, 'be-job', worktreesDirFor(m.root, be));
+  expect(readFileSync(join(wt, 'validated.txt'), 'utf8').trim()).toBe('test'); // ran in the agent's worktree, with the wrapper's `test`
+  // abc-fe has no test script: the refusal names the repository.
+  const r = await tool(s, 'fe-job', 'step_done', { n: 5 });
+  expect(r.body).toMatchObject({ status: 'refused', code: 'no_test_command' });
+  expect(r.body.detail).toContain('abc-fe');
 });
 it('report_blocked tells the main, shows Blocked, and the next closed step clears it', async () => {
   const { s } = await boot();

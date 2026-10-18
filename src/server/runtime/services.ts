@@ -56,9 +56,11 @@ export interface Services {
   requestStore: RequestStore;
   secretPatterns: () => string[];
   // tests (runtime/tests.ts)
-  detectedTestCommand: () => string | undefined;
+  /** The command a folder's files suggest: `cwd` (a repository folder a run happens in), else the project folder. */
+  detectedTestCommand: (cwd?: string) => string | undefined;
   testsDisabled: () => boolean;
-  testCommandAt: (moment: TestMoment) => () => string | undefined;
+  /** The command of a moment for a run in `cwd` (the repository folder it runs in); without `cwd`, detection looks at the project folder. */
+  testCommandAt: (moment: TestMoment) => (cwd?: string) => string | undefined;
   testRunnerAt: (moment: TestMoment) => TestRunner;
   reportLanguage: () => { lang: string; t: ReturnType<typeof createTranslator> };
   // agents (runtime/agents.ts)

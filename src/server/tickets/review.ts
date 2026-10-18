@@ -149,7 +149,7 @@ export class ReviewService {
     const inhibited = this.d.testsDisabled?.() === true;
     let tests = !inhibited && ticket.tests && ticket.tests.sha === sha && !o.rerun ? ticket.tests : undefined;
     if (!tests && !inhibited) {
-      const command = this.d.testCommand()?.trim();
+      const command = this.d.testCommand(wt.worktree)?.trim();
       if (!command) return { ok: false, code: 'no_test_command' };
       const head = await git(wt.worktree, ['rev-parse', 'HEAD']);
       if (head.code !== 0) return { ok: false, code: 'git_failed', detail: head.stderr.trim() };

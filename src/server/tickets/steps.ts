@@ -213,8 +213,15 @@ export class StepService {
     }
 
     if (isValidation && this.d.testsDisabled?.() !== true) {
-      const command = this.d.testCommand()?.trim();
-      if (!command) return refuse('no_test_command', { detail: 'the project has no test command: ask the main to set it in the console options' });
+      const command = this.d.testCommand(wt.worktree)?.trim();
+      if (!command) {
+        const repo = ticket.repo;
+        return refuse('no_test_command', {
+          detail: repo
+            ? `no test command was set for the project, and none was detected in the repository ${repo} (no pom.xml, build.gradle or package.json test script): ask the main to set one in the console options`
+            : 'the project has no test command: ask the main to set it in the console options',
+        });
+      }
       const v = await (this.d.runTests ?? runDirect)({ cwd: wt.worktree, command, timeoutMs: this.d.testTimeoutMs(), owner: slug, watchOwner: true });
       if (!v.ok) return refuse('validation_failed', { tail: v.tail, ...(v.timedOut ? { timedOut: true, detail: 'the test command timed out and was stopped' } : v.cancelled ? { detail: 'the test run was cancelled' } : { detail: `the test command exited with code ${v.code}` }) });
     }
