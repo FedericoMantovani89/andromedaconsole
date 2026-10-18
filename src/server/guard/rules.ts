@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { win32 } from 'node:path';
 import { findSecrets, globMayMatchSecret } from '../git/secrets';
 import { baseName, hasComponent, isInside, realResolve, translatePath } from './paths';
@@ -250,10 +249,7 @@ function isHooksPath(p: string): boolean {
   return parts.includes('console-hooks') || parts.some((c, i) => c === '.git' && parts[i + 1] === 'hooks');
 }
 
-/** The words of a command that it may write to: redirection targets and, for a command that writes files, its non-flag arguments. */
-const SETTINGS_FILES = new Set(['settings.json', 'settings.local.json']);
-/** Commands that remove or move what they name: naming a folder that holds `.claude` (or the mod) takes it away too. */
-const FOLDER_MOVERS = new Set([...RM_COMMANDS, 'mv', 'move', 'move-item', 'mi', 'rename-item', 'ren', 'rni']);
+const SETTINGS_FILE = 'settings.local.json';
 
 /** A path's components as Windows reads them: no quotes, no `.` segments, no trailing dots or spaces, lower case. */
 function winComponents(p: string): string[] {
@@ -262,34 +258,33 @@ function winComponents(p: string): string[] {
     .filter((c) => c !== '' && c !== '.');
 }
 
-/** `.claude/settings.json` or `.claude/settings.local.json`, read lexically. */
+/** `.claude/settings.local.json`, read lexically. */
 function isSettingsPath(p: string): boolean {
   const c = winComponents(p);
-  return c.length >= 2 && c[c.length - 2] === '.claude' && SETTINGS_FILES.has(c[c.length - 1]!);
+  return c.length >= 2 && c[c.length - 2] === '.claude' && c[c.length - 1] === SETTINGS_FILE;
 }
 
 /**
- * Claude Code's settings files (`.claude/settings.json`, `.claude/settings.local.json`) and the console mod's folder: a session that changed
- * them could load other hooks or switch the mod off, and with it the guard and the release answer (SPEC 15.5). The path is judged as written
- * and resolved (a `cd`, junctions, 8.3 names); the `.claude` folders of the worktree, the project and the user, and the mod folder, may not
- * be replaced, nor (by a remove or move) any folder that holds them. A relative target after a `cd` the guard could not follow is refused.
+ * Claude Code's local settings of a project (`.claude/settings.local.json`, where the console's own permissions live) and the console mod's
+ * folder: a session that changed them could load other hooks or switch the mod off, and with it the guard and the release answer (SPEC 15.5).
+ * Only that one settings file, on purpose: `settings.json` and the `.claude` folder stay free for projects that do not use the console. The
+ * path is judged as written and as resolved (a `cd`, junctions, 8.3 names); after a `cd` the guard could not follow, a relative target
+ * named `settings.local.json` is refused.
  */
-function isConsoleConfigTarget(t: string, ctx: GuardContext, cwd: string | null, mover: boolean): boolean {
+function isConsoleConfigTarget(t: string, ctx: GuardContext, cwd: string | null): boolean {
   if (isNullDevice(t)) return false;
   if (isSettingsPath(t)) return true;
   const translated = translatePath(t);
   if (translated === null) return false; // an unknown variable: only the lexical check above can judge it
-  if (cwd === null && !win32.isAbsolute(translated)) return true;
+  if (cwd === null && !win32.isAbsolute(translated)) return winComponents(t).at(-1) === SETTINGS_FILE;
   const base = cwd ?? ctx.worktree;
   const real = realResolve(t, base);
   if (real === null) return false;
   if (isSettingsPath(real)) return true;
-  if (ctx.modDir !== undefined && isInside(ctx.modDir, real, base)) return true;
-  const guarded = [ctx.worktree, ctx.repo, homedir()].map((d) => win32.join(d, '.claude'));
-  if (ctx.modDir !== undefined) guarded.push(ctx.modDir);
-  return guarded.some((dir) => isInside(real, dir, base) && (mover || isInside(dir, real, base)));
+  return ctx.modDir !== undefined && isInside(ctx.modDir, real, base);
 }
 
+/** The words of a command that it may write to: redirection targets and, for a command that writes files, its non-flag arguments. */
 function writtenPaths(argv: string[]): string[] {
   const name = commandName(argv[0] ?? '');
   const rest = argv.slice(1);
@@ -371,8 +366,7 @@ function evaluateShell(call: GuardCall, ctx: GuardContext): GuardDecision {
     }
     const secret = secretTargets(s.argv).find((t) => isSecret(t, ctx.secretPatterns));
     if (secret !== undefined) return deny('secret.file', `${baseName(secret)} looks like a secret and must not be touched`);
-    const mover = FOLDER_MOVERS.has(name);
-    const config = [...writtenPaths(s.argv).filter(isSettingsPath), ...writeTargets(s.argv)].find((t) => isConsoleConfigTarget(t, ctx, cwd, mover));
+    const config = [...writtenPaths(s.argv).filter(isSettingsPath), ...writeTargets(s.argv)].find((t) => isConsoleConfigTarget(t, ctx, cwd));
     if (config !== undefined) return deny('path.console-config', `${config} is Claude Code's or the console mod's configuration and must not be changed`);
     if (ctx.role === 'main') {
       const hook = hooksTarget(s.argv);
@@ -392,7 +386,7 @@ function evaluateFileTool(call: GuardCall, ctx: GuardContext): GuardDecision {
   if (typeof raw !== 'string' || raw === '') return ALLOW;
   if (isSecret(raw, ctx.secretPatterns)) return deny('secret.file', `${baseName(raw)} looks like a secret and must not be touched`);
   if (call.tool === 'Read' || call.tool === 'Grep' || call.tool === 'Glob') return ALLOW;
-  if (isConsoleConfigTarget(raw, ctx, ctx.worktree, false)) return deny('path.console-config', `${raw} is Claude Code's or the console mod's configuration and must not be changed`);
+  if (isConsoleConfigTarget(raw, ctx, ctx.worktree)) return deny('path.console-config', `${raw} is Claude Code's or the console mod's configuration and must not be changed`);
   if (ctx.role === 'main' && isHooksPath(raw)) return deny('git.hooks-tamper', `${raw} holds the console push hook`);
   if (hasComponent(raw, '.git')) return deny('path.git-internals', `${raw} is inside git's own files`);
   if (!isInside(ctx.worktree, raw, ctx.worktree)) return deny('path.outside-worktree', `${raw} is outside the agent's worktree`);
