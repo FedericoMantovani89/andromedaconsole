@@ -1,4 +1,5 @@
 import { evaluate } from '../guard/rules';
+import { resourcePath } from '../paths';
 import type { Context } from '../http';
 import type { ProjectContainer } from './services';
 
@@ -11,6 +12,8 @@ export function guardCall(k: ProjectContainer): Context['guard'] {
   const restrictions = k.get('restrictions');
   const sessionGuardMode = k.get('sessionGuardMode');
   const guardLog = k.get('guardLog');
+  // The folder sessions load the mod from (http-context's modDir); the shipped one even when the mod is off, since nobody should edit it.
+  const modDir = typeof o.modDir === 'string' ? o.modDir : resourcePath('mod');
   return (slug, tool, input) => {
     // Which optional helpers the shell commands use (only counters are kept): the Prerequisites tab shows whether they are used.
     if ((tool === 'Bash' || tool === 'PowerShell') && typeof input.command === 'string') shared.helperUsage.record(input.command);
@@ -22,6 +25,7 @@ export function guardCall(k: ProjectContainer): Context['guard'] {
       worktree: role !== 'main' && rt?.git ? rt.git.worktree : o.projectRoot, repo: o.projectRoot,
       branch: rt?.git?.branch ?? '', projectBranch: `project/${projectName}`, secretPatterns: secretPatterns(),
       restricted: restrictions.get(slug),
+      modDir,
     });
     if (verdict.decision === 'allow') return verdict;
     const mode = sessionGuardMode.get(slug) ?? runtime.guardMode;

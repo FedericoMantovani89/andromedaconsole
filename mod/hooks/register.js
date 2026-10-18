@@ -22,6 +22,8 @@ let ctx = null; // { url, token, role, agent, sid } once session.start has run i
 let releaseKey = '';
 /** @type {Record<string, true>} release requests whose dialog answer was already posted */
 const releasesPosted = {};
+/** @type {Record<string, true>} answered dialogs (tool_use_id + question) the console already judged */
+const dialogsPosted = {};
 /** How the console's release question starts (src/server/tickets/release.ts, RELEASE_QUESTION_RE). */
 const RELEASE_QUESTION = /^\[release ([A-Za-z0-9-]{1,64})\] /;
 /** The only two answers that count: the labels of the dialog's options, exactly. Free text typed under "Other" is ignored. */
@@ -308,17 +310,26 @@ async function postReleaseAnswers(/** @type {Engine} */ $) {
   for (const m of messages) {
     for (const use of (m && Array.isArray(m.toolUses) ? m.toolUses : [])) {
       if (!use || use.tool !== 'AskUserQuestion' || use.isError) continue;
+      // Only what the dialog showed counts: a question the model put in its own input (never pre-filled answers), answered by the user.
+      const input = /** @type {any} */ (use.input);
+      if (!input || typeof input !== 'object' || input.answers !== undefined || input.annotations !== undefined || !Array.isArray(input.questions)) continue;
+      const shown = input.questions.map((/** @type {any} */ q) => (q && typeof q.question === 'string' ? q.question : ''));
       const record = /** @type {any} */ (use.result);
       const answers = record && typeof record === 'object' && record.answers && typeof record.answers === 'object' ? record.answers : undefined;
       if (!answers) continue;
       for (const question of Object.keys(answers)) {
+        if (shown.indexOf(question) === -1) continue;
         const found = RELEASE_QUESTION.exec(question);
         const label = String(answers[question]);
         const answer = label === 'Approve' || label === 'Reject' ? RELEASE_ANSWERS[label] : undefined;
         const id = found ? String(found[1]) : '';
-        if (!id || !answer || releasesPosted[id]) continue;
+        const seen = String(use.tool_use_id) + '\n' + question;
+        if (!id || !answer || releasesPosted[id] || dialogsPosted[seen]) continue;
         const r = await call($, 'POST', '/v1/tools/release_answer', { id, answer, question, key: releaseKey });
-        if (r.json) releasesPosted[id] = true; // the console answered (ok or unknown_request): never again; unreachable: next turn
+        // Only an accepted answer closes the id, so a corrected dialog for the same request still counts after unknown_request; the dialog
+        // the console already judged is not sent again (unreachable: tried again next turn).
+        if (r.json) dialogsPosted[seen] = true;
+        if (r.json && r.json.status === 'ok') releasesPosted[id] = true;
       }
     }
   }
@@ -412,9 +423,9 @@ async function onNativeQuestion(/** @type {Engine} */ $, /** @type {Ev} */ e, /*
       return { deny: 'You cannot ask the user directly. Ask the main session instead: mcp__console-mod__send_message {type: "question", to: <the main, see list_agents>, text} with the question and, if it has fixed choices, every option written out; the answer arrives later as a message.' };
     }
     // The model fills in no answer of its own to a release question: only the user's choice in the dialog counts.
-    if (ctx && ctx.role === 'main' && e.answers !== undefined && Array.isArray(e.questions)
-      && e.questions.some((/** @type {Ev} */ q) => q && RELEASE_QUESTION.test(String(q.question)))) {
-      return { deny: 'Show the release question without an answers field: the user chooses in the dialog.' };
+    // Any answers/annotations in the input could be keyed on a release question the dialog never showed: refused whatever the questions say.
+    if (ctx && ctx.role === 'main' && (e.answers !== undefined || e.annotations !== undefined)) {
+      return { deny: 'Call AskUserQuestion without answers or annotations fields: the user chooses in the dialog.' };
     }
     if (!ctx || ctx.role === 'main' || !Array.isArray(e.questions) || e.questions.length === 0) return next(e);
     /** @type {Record<string, string>} */

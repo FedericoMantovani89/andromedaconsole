@@ -45,17 +45,18 @@ export const RELEASE_QUESTION_RE = /^\[release ([A-Za-z0-9-]{1,64})\] /;
 const QUESTION_SLUGS = 10;
 
 /** The one question the main shows with AskUserQuestion, and the console compares word for word: what is released, then the request id. */
-export function releaseQuestion(o: { id: string; project: string; targets: string; slugs: string[]; files: number; tests?: { ok: boolean; command: string } }): string {
+export function releaseQuestion(o: { id: string; project: string; targets: string; slugs: string[]; files: number; tests?: { ok: boolean; command: string }; /** A folder of several repositories: their names (`''` = the folder itself). */ repos?: string[] }): string {
   const shown = o.slugs.slice(0, QUESTION_SLUGS).join(', ') + (o.slugs.length > QUESTION_SLUGS ? `, +${o.slugs.length - QUESTION_SLUGS} more` : '');
   const tests = o.tests ? `tests passed (${o.tests.command})` : 'no test command, tests not run';
-  return `[release ${o.id}] Release project "${o.project}" to origin/${o.targets}: ${o.slugs.length} ticket${o.slugs.length === 1 ? '' : 's'} (${shown}), `
+  const where = o.repos && o.repos.length > 0 ? ` in ${o.repos.length} repositor${o.repos.length === 1 ? 'y' : 'ies'} (${o.repos.map((r) => r || '(project folder)').join(', ')})` : '';
+  return `[release ${o.id}] Release project "${o.project}"${where} to origin/${o.targets}: ${o.slugs.length} ticket${o.slugs.length === 1 ? '' : 's'} (${shown}), `
     + `${o.files} file${o.files === 1 ? '' : 's'} changed, ${tests}. Approve?`;
 }
 
 /** The message the main gets when a release is asked: show this dialog as written, and leave the answer to the console. */
 function releaseNotice(id: string, question: string): string {
   return `Release request ${id} is waiting for the user. Show it now with AskUserQuestion, exactly as written (one question, nothing reworded): `
-    + `question ${JSON.stringify(question)}, header "Release", options "Approve" (merge into main and push to origin) and "Reject" (nothing is merged or pushed), multiSelect false. `
+    + `question ${JSON.stringify(question)}, header "Release", options in this order "Reject" (nothing is merged or pushed) and "Approve" (merge into main and push to origin), multiSelect false. `
     + 'Do nothing else with the answer: the console reads it from the dialog and acts on it, then tells you the outcome. '
     + 'The user may answer in the console queue instead; either answer closes both.';
 }
@@ -134,7 +135,7 @@ export class ReleaseService {
       { text: `Release project "${this.d.project}" (${slugs.length} ticket${slugs.length === 1 ? '' : 's'}) to origin/${targets}?`, payload },
       (answer) => this.answered(answer, { id, items }),
     );
-    const question = releaseQuestion({ id, project: this.d.project, targets, slugs, files: files.length, tests });
+    const question = releaseQuestion({ id, project: this.d.project, targets, slugs, files: files.length, tests, ...(named ? { repos: items.map((i) => i.repo) } : {}) });
     this.pending = { id, items, question };
     this.d.notifyMain(releaseNotice(id, question));
     return { status: 'asked', id };

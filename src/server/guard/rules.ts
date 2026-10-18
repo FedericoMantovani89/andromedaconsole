@@ -13,7 +13,9 @@ export interface GuardContext {
   readOnly?: boolean;
   /** A session held back by the console. For `loop` only the call with this exact signature is refused; for the others every guarded tool is. */
   restricted?: { reason: 'budget' | 'loop' | 'limit'; signature?: string };
-  worktree: string; repo: string; branch: string; projectBranch: string; secretPatterns: string[] }
+  worktree: string; repo: string; branch: string; projectBranch: string; secretPatterns: string[];
+  /** The console mod's folder (the hooks that guard the session and read the release answer): no session may change it. */
+  modDir?: string }
 export interface GuardCall { role: 'main' | 'agent'; tool: string; input: Record<string, unknown> }
 export type GuardDecision = { decision: 'allow' } | { decision: 'deny'; reason: string; rule: string };
 
@@ -21,7 +23,7 @@ const ALLOW: GuardDecision = { decision: 'allow' };
 const deny = (rule: string, reason: string): GuardDecision => ({ decision: 'deny', rule, reason });
 
 /** Rules that also bind the main session (SPEC 14.2). Everything else is for agents only. */
-const MAIN_RULES = new Set(['git.force', 'git.delete-ref', 'git.tag', 'secret.file', 'rm.wide', 'net.download-exec', 'git.protected-ref', 'git.no-verify', 'git.hooks-tamper', 'agent.builtin-subagent']);
+const MAIN_RULES = new Set(['git.force', 'git.delete-ref', 'git.tag', 'secret.file', 'rm.wide', 'net.download-exec', 'git.protected-ref', 'git.no-verify', 'git.hooks-tamper', 'agent.builtin-subagent', 'path.console-config']);
 
 /** Claude Code's built-in subagent types that only look things up. Any other (general-purpose, or none given) can change files. */
 const READONLY_SUBAGENTS = new Set(['explore', 'plan', 'claude-code-guide']);
@@ -248,6 +250,17 @@ function isHooksPath(p: string): boolean {
 }
 
 /** The words of a command that it may write to: redirection targets and, for a command that writes files, its non-flag arguments. */
+/**
+ * Claude Code's settings files (`.claude/settings.json`, `.claude/settings.local.json`, any `.claude/settings*.json`) and the console mod's
+ * folder: a session that changed them could load other hooks or switch the mod off, and with it the guard and the release answer (SPEC 15.5).
+ */
+function isConsoleConfigPath(p: string, ctx: GuardContext, cwd: string | null): boolean {
+  const parts = p.replace(/^["']|["']$/g, '').split(/[\\/]+/).map((c) => c.toLowerCase());
+  const last = parts.length - 1;
+  if (last >= 1 && parts[last - 1] === '.claude' && /^settings[^\\/]*\.json$/.test(normalizeSecretPath(parts[last]!))) return true;
+  return ctx.modDir !== undefined && isInside(ctx.modDir, p, cwd ?? ctx.worktree);
+}
+
 function writtenPaths(argv: string[]): string[] {
   const name = commandName(argv[0] ?? '');
   const rest = argv.slice(1);
@@ -329,6 +342,8 @@ function evaluateShell(call: GuardCall, ctx: GuardContext): GuardDecision {
     }
     const secret = secretTargets(s.argv).find((t) => isSecret(t, ctx.secretPatterns));
     if (secret !== undefined) return deny('secret.file', `${baseName(secret)} looks like a secret and must not be touched`);
+    const config = [...writtenPaths(s.argv), ...writeTargets(s.argv)].find((t) => isConsoleConfigPath(t, ctx, cwd));
+    if (config !== undefined) return deny('path.console-config', `${config} is Claude Code's or the console mod's configuration and must not be changed`);
     if (ctx.role === 'main') {
       const hook = hooksTarget(s.argv);
       if (hook !== undefined) return deny('git.hooks-tamper', `${hook} holds the console push hook`);
@@ -347,6 +362,7 @@ function evaluateFileTool(call: GuardCall, ctx: GuardContext): GuardDecision {
   if (typeof raw !== 'string' || raw === '') return ALLOW;
   if (isSecret(raw, ctx.secretPatterns)) return deny('secret.file', `${baseName(raw)} looks like a secret and must not be touched`);
   if (call.tool === 'Read' || call.tool === 'Grep' || call.tool === 'Glob') return ALLOW;
+  if (isConsoleConfigPath(raw, ctx, ctx.worktree)) return deny('path.console-config', `${raw} is Claude Code's or the console mod's configuration and must not be changed`);
   if (ctx.role === 'main' && isHooksPath(raw)) return deny('git.hooks-tamper', `${raw} holds the console push hook`);
   if (hasComponent(raw, '.git')) return deny('path.git-internals', `${raw} is inside git's own files`);
   if (!isInside(ctx.worktree, raw, ctx.worktree)) return deny('path.outside-worktree', `${raw} is outside the agent's worktree`);
