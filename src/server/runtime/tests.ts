@@ -32,6 +32,7 @@ export function registerTests(c: ProjectContainer): void {
       heavy: moment !== 'ticket' || r.command.trim() !== store.project.testCommands?.ticket?.trim(),
       label: `${moment}:${r.owner ?? projectName}`,
       ...(r.owner !== undefined ? { owner: r.owner } : {}),
+      ...(r.skip ? { skip: r.skip } : {}),
       ...(r.watchOwner && r.owner !== undefined ? { ownerAlive: () => k.get('registry').get(r.owner!)?.state !== 'finished' && k.get('ptys').status(r.owner!) === 'running' } : {}),
     });
   });

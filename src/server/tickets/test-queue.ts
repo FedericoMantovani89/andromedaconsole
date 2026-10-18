@@ -6,10 +6,13 @@ export type TestRun = ValidationResult;
 export type Runner = (o: { cwd: string; command: string; timeoutMs: number; signal?: AbortSignal }) => Promise<TestRun>;
 
 /** What the services call: the console hands them the queue (or nothing in a test, then the command simply runs). */
-export type TestRunner = (o: { cwd: string; command: string; timeoutMs: number; owner?: string; /** Stop the run when `owner` (an agent) is gone. */ watchOwner?: boolean }) => Promise<TestRun>;
+export type TestRunner = (o: { cwd: string; command: string; timeoutMs: number; owner?: string; /** Stop the run when `owner` (an agent) is gone. */ watchOwner?: boolean; /** Asked when the run is about to start: true and nothing runs (`notRun`). */ skip?: () => boolean }) => Promise<TestRun>;
+
+const NOT_RUN: TestRun = { ok: false, code: null, tail: '', notRun: true };
+const skipNow = (skip: (() => boolean) | undefined): boolean => { try { return skip?.() === true; } catch { return false; } };
 
 /** No queue: the command runs at once (what the services do when nobody gave them one). */
-export const runDirect: TestRunner = (o) => runValidation({ cwd: o.cwd, command: o.command, timeoutMs: o.timeoutMs });
+export const runDirect: TestRunner = (o) => (skipNow(o.skip) ? Promise.resolve({ ...NOT_RUN }) : runValidation({ cwd: o.cwd, command: o.command, timeoutMs: o.timeoutMs }));
 
 export interface TestJob {
   cwd: string;
@@ -26,6 +29,8 @@ export interface TestJob {
   ownerAlive?: () => boolean;
   /** Called with the position (1 = next) each time it changes while the run waits. */
   onWait?: (position: number) => void;
+  /** Asked when the run's turn comes: true and the command does not run, the run answers `notRun` (a run can wait for minutes). */
+  skip?: () => boolean;
 }
 
 /** What the state shows: who is running and who waits (and their place). */
@@ -102,7 +107,7 @@ export class TestQueue {
     let result: TestRun;
     try {
       const { job } = entry;
-      result = await this.runner({ cwd: job.cwd, command: job.command, timeoutMs: job.timeoutMs, signal: entry.ctl.signal });
+      result = skipNow(job.skip) ? { ...NOT_RUN } : await this.runner({ cwd: job.cwd, command: job.command, timeoutMs: job.timeoutMs, signal: entry.ctl.signal });
     } catch (e) {
       result = FAILED(e);
     } finally {

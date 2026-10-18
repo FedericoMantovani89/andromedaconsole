@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { errorMessage } from '../../shared/guards';
 
-export interface ValidationResult { ok: boolean; code: number | null; tail: string; timedOut?: boolean; /** Stopped (or never started) because its owner is gone. */ cancelled?: boolean }
+export interface ValidationResult { ok: boolean; code: number | null; tail: string; timedOut?: boolean; /** Stopped (or never started) because its owner is gone. */ cancelled?: boolean; /** Never started: the caller's `skip` said so when its turn came (the tests were inhibited meanwhile). */ notRun?: boolean }
 
 const TAIL_BYTES = 4096;
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
