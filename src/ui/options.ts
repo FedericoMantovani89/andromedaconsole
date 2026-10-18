@@ -1,4 +1,5 @@
 import type { ApiError, PrereqResult, StateMessage } from '../shared/protocol';
+import { ownValue } from '../shared/guards';
 import { api } from './api';
 import { errorText } from './new-agent';
 import { bindText, k, language, retranslate, setLanguage, setPlaceholder, setTitle, t } from './i18n-client';
@@ -434,8 +435,8 @@ function projectsTab(env: Env): HTMLElement {
     const input = el('input');
     input.name = `repoTestCommands.${repo}`;
     input.autocomplete = 'off';
-    input.value = state?.project.repoTestCommands?.[repo] ?? '';
-    const found = state?.project.detectedRepoTestCommands?.[repo];
+    input.value = ownValue(state?.project.repoTestCommands, repo) ?? '';
+    const found = ownValue(state?.project.detectedRepoTestCommands, repo);
     if (found) input.placeholder = found; else setPlaceholder(input, k('common.notAvailable'));
     input.addEventListener('change', () => {
       const wanted = input.value;

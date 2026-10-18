@@ -458,6 +458,17 @@ describe('options dialog', () => {
     expect(puts).toContainEqual({ repoTestCommands: { 'abc-fe': 'npm run test:ci' } });
     expect(puts).toContainEqual({ repoTestCommands: { 'abc-be': '' } });
   });
+  it('a repository folder named like an object property (constructor) shows its own command or n/a, never something inherited', async () => {
+    const odd = { ...state, project: { name: 'p', repos: ['constructor', 'toString'], detectedRepoTestCommands: { toString: 'npm test' }, repoTestCommands: {} } } as unknown as StateMessage;
+    await openOptions(() => odd, 'projects');
+    await flush();
+    const c = document.querySelector<HTMLInputElement>('input[name="repoTestCommands.constructor"]')!;
+    const s = document.querySelector<HTMLInputElement>('input[name="repoTestCommands.toString"]')!;
+    expect(c.value).toBe('');
+    expect(c.dataset.i18nPlaceholder).toBe('common.notAvailable');
+    expect(s.value).toBe('');
+    expect(s.placeholder).toBe('npm test');
+  });
   it('a project folder that is one repository has no repository rows', async () => {
     await openOptions(() => ({ ...state, project: { name: 'p', repos: [] } }) as unknown as StateMessage, 'projects');
     await flush();

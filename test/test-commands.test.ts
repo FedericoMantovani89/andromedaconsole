@@ -14,6 +14,7 @@ import { Container } from '../src/server/runtime/container';
 import type { Env } from '../src/server/runtime/env';
 import type { Services } from '../src/server/runtime/services';
 import { registerTests } from '../src/server/runtime/tests';
+import { loadBundles } from '../src/server/i18n-bundles';
 
 vi.setConfig({ testTimeout: 60_000 });
 autoClose();
@@ -147,6 +148,16 @@ describe("a repository's own test command (repoTestCommands, keyed by the reposi
     expect(testCommandFor('release', { project: () => ({ repoTestCommands: { 'abc-fe': '  ' } }), detected: () => 'detected' }, 'C:/wt', 'abc-fe')).toBe('detected');
     expect(testCommandFor('ticket', { project: () => ({ ...p, testsDisabled: true }), detected: () => 'detected' }, 'C:/wt', 'abc-be')).toBeUndefined();
   });
+  it('a repository folder named like an object property (constructor, toString, __proto__) has only the commands set for it', () => {
+    const d = { project: () => ({ testCommand: 'npm test', repoTestCommands: {} as Record<string, string> }), detected: (): string => 'detected' };
+    for (const repo of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(testCommandFor('ticket', d, 'C:/wt', repo), repo).toBe('npm test');
+    const s = new ProjectStore(folder());
+    s.init('p');
+    s.setRepoTestCommands(JSON.parse('{"__proto__":"proto test","constructor":"ctor test"}') as Record<string, string>, ['__proto__', 'constructor']); // as the HTTP body arrives
+    expect(Object.keys(s.project.repoTestCommands!).sort()).toEqual(['__proto__', 'constructor']);
+    expect(testCommandFor('merge', { project: () => s.project, detected: () => undefined }, 'C:/wt', 'constructor')).toBe('ctor test');
+    expect(testCommandFor('merge', { project: () => s.project, detected: () => undefined }, 'C:/wt', '__proto__')).toBe('proto test');
+  });
   it('PUT /api/project sets and clears a repository command, the state lists the repositories with what each detects, and an unknown one is refused', async () => {
     const m = makeMultiRepo(['abc-fe', 'abc-be']);
     try {
@@ -164,6 +175,7 @@ describe("a repository's own test command (repoTestCommands, keyed by the reposi
       const unknown = await put({ testCommand: 'changed', repoTestCommands: { 'abc-xx': 'x' } });
       expect(unknown.status).toBe(422);
       expect(unknown.body.code).toBe('project.repoUnknown');
+      expect(unknown.body.params).toEqual({ repos: 'abc-xx', available: 'abc-be, abc-fe' });
       const bad = await put({ repoTestCommands: { 'abc-fe': 'a\nb' } });
       expect(bad.status).toBe(422);
       expect(bad.body.code).toBe('project.testCommandInvalid');
@@ -203,7 +215,16 @@ describe("a repository's own test command (repoTestCommands, keyed by the reposi
     expect((await state(s)).project.repos).toEqual([]);
     const r = await ui(s, '/api/project', 'PUT', { repoTestCommands: { 'abc-be': 'x' } });
     expect(r.status).toBe(422);
-    expect(r.body.code).toBe('project.repoUnknown');
+    expect(r.body.code).toBe('project.repoUnknownNone');
+    expect(r.body.params).toEqual({ repos: 'abc-be' });
+  });
+  it('the refusal texts name the repositories that can be used, in every language', () => {
+    for (const [lang, messages] of loadBundles()) {
+      expect(messages['error.project.repoUnknown'], lang).toContain('{available}');
+      expect(messages['error.project.repoUnknown'], lang).toContain('{repos}');
+      expect(messages['error.project.repoUnknownNone'], lang).toContain('{repos}');
+      expect(messages['error.project.repoUnknownNone'], lang).not.toContain('{available}');
+    }
   });
 });
 

@@ -622,7 +622,12 @@ export function createRequestHandler(source: Context | ProjectResolver, host: Ho
       if (hasRepos && !isValidRepoTestCommands(b.repoTestCommands)) return fail(res, 422, 'project.testCommandInvalid');
       const knownRepos = ctx.repos().filter((r) => r !== '');
       const strangers = hasRepos ? unknownRepos(b.repoTestCommands as Record<string, string>, knownRepos) : [];
-      if (strangers.length > 0) return fail(res, 422, 'project.repoUnknown', { repos: strangers.join(', ') });
+      // The text names the repositories that can be used; a folder that is itself the repository has none to name.
+      if (strangers.length > 0) {
+        return knownRepos.length > 0
+          ? fail(res, 422, 'project.repoUnknown', { repos: strangers.join(', '), available: knownRepos.join(', ') })
+          : fail(res, 422, 'project.repoUnknownNone', { repos: strangers.join(', ') });
+      }
       for (const f of projectFields) {
         const v = typeof b[f] === 'string' ? (b[f] as string).trim() : b[f];
         const clears = v === null || v === '' || (Array.isArray(v) && v.length === 0);

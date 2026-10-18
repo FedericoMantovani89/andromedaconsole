@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { ProjectInfo, TestMoment } from './project-store';
 import { detectProject } from './templates/detect';
+import { ownValue } from '../shared/guards';
 
 /** How long the command detected in a folder is kept before its files are read again. */
 const DETECT_KEEP_MS = 5000;
@@ -37,7 +38,7 @@ export function testCommandFor(
   let p: ReturnType<typeof d.project> = {};
   try { p = d.project(); } catch { /* a damaged project.json: as a project with no settings */ }
   if (p.testsDisabled === true) return undefined;
-  const own = repo ? p.repoTestCommands?.[repo]?.trim() : undefined;
+  const own = repo ? ownValue(p.repoTestCommands, repo)?.trim() : undefined;
   return own || p.testCommands?.[moment]?.trim() || p.testCommand?.trim() || d.detected(cwd);
 }
 

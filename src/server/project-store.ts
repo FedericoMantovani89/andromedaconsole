@@ -154,7 +154,8 @@ export class ProjectStore {
     if (!isValidRepoTestCommands(patch)) throw new Error('project.testCommandInvalid');
     if (unknownRepos(patch, repos).length > 0) throw new Error('project.repoUnknown');
     const { repoTestCommands: old, ...rest } = this.project;
-    const next: Record<string, string> = { ...old };
+    // No prototype: a repository folder named `__proto__` is a key like any other, not the object's prototype.
+    const next: Record<string, string> = Object.assign(Object.create(null) as Record<string, string>, old);
     for (const [repo, command] of Object.entries(patch)) {
       if (command.trim() === '') delete next[repo]; else next[repo] = command.trim();
     }
