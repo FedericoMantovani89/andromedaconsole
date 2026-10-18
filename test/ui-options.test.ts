@@ -430,6 +430,39 @@ describe('options dialog', () => {
     await openOptions(() => state, 'projects');
     expect(document.querySelector('.settings-test .info-icon')!.getAttribute('data-i18n-title')).toBe('settings.testCommand.tip.none');
   });
+  it('a folder of several repositories has one test command row per repository: detected command or n/a as placeholder, saved with the one Save', async () => {
+    const multi = { ...state, project: { name: 'p', repos: ['abc-be', 'abc-fe'], detectedRepoTestCommands: { 'abc-fe': 'npm test' }, repoTestCommands: { 'abc-be': 'mvn -q test' } } } as unknown as StateMessage;
+    await openOptions(() => multi, 'projects');
+    await flush();
+    const be = document.querySelector<HTMLInputElement>('input[name="repoTestCommands.abc-be"]')!;
+    const fe = document.querySelector<HTMLInputElement>('input[name="repoTestCommands.abc-fe"]')!;
+    expect(be.value).toBe('mvn -q test');
+    expect(be.dataset.i18nPlaceholder).toBe('common.notAvailable'); // nothing detected in abc-be: "n/a"
+    expect(fe.value).toBe('');
+    expect(fe.placeholder).toBe('npm test');
+    const head = fe.closest('label')!.querySelector('.options-field-head')!;
+    expect(head.querySelector('[data-i18n="settings.repoTestCommand"]')!.getAttribute('data-i18n-params')).toBe(JSON.stringify({ repo: 'abc-fe' }));
+    expect(head.querySelector('.info-icon')!.getAttribute('data-i18n-title')).toBe('settings.repoTestCommand.tip');
+    // The project-wide field does not claim that nothing was detected: each repository detects its own.
+    expect(document.querySelector('.settings-test .info-icon')!.getAttribute('data-i18n-title')).toBe('settings.testCommand.tip.repos');
+    fe.value = 'npm run test:ci';
+    fe.dispatchEvent(new Event('change'));
+    be.value = '';
+    be.dispatchEvent(new Event('change'));
+    expect(puts).toEqual([]); // one Save
+    const off = document.querySelector<HTMLInputElement>('input[name="testsDisabled"]')!;
+    off.checked = true;
+    off.dispatchEvent(new Event('change'));
+    expect(fe.disabled).toBe(true); // inhibited tests: these rows are off too
+    await clickSave();
+    expect(puts).toContainEqual({ repoTestCommands: { 'abc-fe': 'npm run test:ci' } });
+    expect(puts).toContainEqual({ repoTestCommands: { 'abc-be': '' } });
+  });
+  it('a project folder that is one repository has no repository rows', async () => {
+    await openOptions(() => ({ ...state, project: { name: 'p', repos: [] } }) as unknown as StateMessage, 'projects');
+    await flush();
+    expect(document.querySelector('input[name^="repoTestCommands."]')).toBeNull();
+  });
   it('the models menu offers Default and real models only, never an alias', async () => {
     await openOptions(() => state, 'models');
     await flush();

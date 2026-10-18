@@ -1,7 +1,7 @@
 // `npm run shot -- <options>`: a screenshot of the real UI in Edge, from a throw-away console (fake agent, a temporary config and project).
 //   --tab <name>      open the Options dialog on that tab (models, profiles, budget, guard, notifications, language, prerequisites, plugins, projects, git)
 //   --lang <code>     interface language (default en)
-//   --folder <kind>   the project folder: plain (not a repository, default), repo (a repository with one commit; the default with --states, --many or --agents), mixed (not a repository, holds one)
+//   --folder <kind>   the project folder: plain (not a repository, default), repo (a repository with one commit; the default with --states, --many or --agents), mixed (not a repository, holds one), multi (not a repository, holds abc-be and abc-fe)
 //   --split <pct>     the main column's share of the width (what dragging the divider remembers), for example 30 or 75
 //   --states          one agent per state (the page's state messages are rewritten: starting, working, waiting, idle with a merged ticket, studying, blocked,
 //                     interrupted, finished, suspended, dormant, queued), to see every button and chip; four are real panels, the rest bars
@@ -42,7 +42,7 @@ if (!Number.isInteger(agentCount) || agentCount < 0 || agentCount > 9) { console
 const updatePhase = one('update') as 'available' | 'downloading' | 'ready' | undefined;
 if (updatePhase !== undefined && !['available', 'downloading', 'ready'].includes(updatePhase)) { console.error('--update is available, downloading or ready'); process.exit(1); }
 const out = resolve(one('out') ?? join(tmpdir(), 'shot.png'));
-if (!['plain', 'repo', 'mixed'].includes(kind)) { console.error('--folder is plain, repo or mixed'); process.exit(1); }
+if (!['plain', 'repo', 'mixed', 'multi'].includes(kind)) { console.error('--folder is plain, repo, mixed or multi'); process.exit(1); }
 
 const { startServer } = await import('../src/server/index');
 const root = resolve(import.meta.dirname, '..');
@@ -54,6 +54,11 @@ const project = mkdtempSync(join(tmpdir(), 'shot-proj-'));
 writeFileSync(join(configDir, 'config.json'), JSON.stringify({ schema: 1, language: lang, ...(agentCount > 0 ? { agents: { maxActiveGlobal: 12, maxActivePerProject: 12 } } : {}) })); // a saved config: no first-start wizard
 if (kind === 'repo') { git(project, 'init', '-q', '-b', 'main'); writeFileSync(join(project, 'README.md'), 'hello\n'); git(project, 'add', '-A'); git(project, 'commit', '-q', '-m', 'init'); }
 if (kind === 'mixed') { const sub = join(project, 'sub-repo'); mkdirSync(sub); git(sub, 'init', '-q', '-b', 'main'); }
+if (kind === 'multi') {
+  // abc-be detects nothing (no build file), abc-fe detects `npm test`: the Project tab shows a row per repository, one with n/a.
+  for (const name of ['abc-be', 'abc-fe']) { const sub = join(project, name); mkdirSync(sub); git(sub, 'init', '-q', '-b', 'main'); }
+  writeFileSync(join(project, 'abc-fe', 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
+}
 
 const server = await startServer({ port: 0, projectRoot: project, projectName: 'shot-demo', configDir, claudeCommand: [process.execPath, fixture], modDir: null, projectsDir: tmpdir(),
   ...(updatePhase ? { updates: { state: () => ({ phase: updatePhase, version: '0.0.2', ...(updatePhase === 'downloading' ? { percent: 40 } : {}) }), download: () => undefined, install: () => undefined, onChange: () => undefined } } : {}) } as Parameters<typeof startServer>[0]);

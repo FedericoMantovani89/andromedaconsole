@@ -114,6 +114,20 @@ describe('ticketReport', () => {
     command = '  ';
     expect(await svc.ticketReport('a-job')).toMatchObject({ ok: false, code: 'no_test_command' });
   });
+  it("asks for the command of the ticket's repository and, with none, names it and where to set one", async () => {
+    deliver({ 'src/a.js': 'x\n' });
+    tickets.setRepo('a-job', 'abc-fe');
+    const asked: [string | undefined, string | undefined][] = [];
+    const repoSvc = new ReviewService({
+      tickets, root: t.repo, project: 'p', worktreeOf: (slug) => (slug === 'a-job' ? { worktree: wt, branch } : undefined),
+      testCommand: (cwd, repo) => { asked.push([cwd, repo]); return undefined; }, testTimeoutMs: () => 1000, language: () => ({ lang, t: (k: string) => k }),
+      spawnReviewer: async () => ({ ok: true }), existingSlugs: () => [], authorAlive: () => true, notifyMain: () => {}, notifyAuthor: () => {}, askUser: () => {}, endReviewer: () => {},
+    });
+    const r = await repoSvc.ticketReport('a-job');
+    expect(asked).toEqual([[wt, 'abc-fe']]);
+    expect(r).toMatchObject({ ok: false, code: 'no_test_command' });
+    expect(!r.ok && r.detail).toContain('test command of the repository abc-fe');
+  });
   it('a worktree that is gone is reported as such', async () => {
     deliver({ 'src/a.js': 'x\n' });
     const gone = new ReviewService({ tickets, root: t.repo, project: 'p', worktreeOf: () => undefined, testCommand: () => command, testTimeoutMs: () => 1000, language: () => ({ lang, t: (k: string) => k }), spawnReviewer: async () => ({ ok: true }), existingSlugs: () => [], authorAlive: () => true, notifyMain: () => {}, notifyAuthor: () => {}, askUser: () => {}, endReviewer: () => {} });

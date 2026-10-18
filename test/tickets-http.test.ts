@@ -132,6 +132,21 @@ it("in a project folder of several repositories, with nothing saved, the validat
   const r = await tool(s, 'fe-job', 'step_done', { n: 5 });
   expect(r.body).toMatchObject({ status: 'refused', code: 'no_test_command' });
   expect(r.body.detail).toContain('abc-fe');
+  expect(r.body.detail).toContain('test command of the repository abc-fe'); // where to set it
+});
+it("a repository's own command, saved in the options, is what its agents' validation step runs", async () => {
+  const m = makeMultiRepo(['abc-fe', 'abc-be'], { remote: true });
+  made.push(m);
+  const s = await bootServer({ projectRoot: m.root, config: { git: { worktrees: true } } });
+  // abc-fe detects nothing; the project-wide command is red, the repository's own writes a file in the worktree it runs in.
+  const own = `node -e "require('fs').writeFileSync('own.txt','fe')"`;
+  expect((await ui(s, '/api/project', 'PUT', { testCommand: 'node -e "process.exit(1)"', repoTestCommands: { 'abc-fe': own } })).status).toBe(200);
+  expect((await mod(s, 'shop-api', '/v1/tools/spawn_agent', 'POST', { name: 'fe-job', profile: 'developer', goal: 'make it work', repo: 'abc-fe' })).body.status).toBe('started');
+  await tool(s, 'fe-job', 'checklist_set', { items: ITEMS });
+  for (let n = 1; n <= 4; n++) expect((await tool(s, 'fe-job', 'step_done', { n, note: 'a decent note for this step' })).body.status, `step ${n}`).toBe('closed');
+  expect((await tool(s, 'fe-job', 'step_done', { n: 5 })).body).toMatchObject({ status: 'closed', n: 5 });
+  const fe = m.repos['abc-fe']!.repo;
+  expect(readFileSync(join(multiWorktreePathFor(fe, 'fe-job', worktreesDirFor(m.root, fe)), 'own.txt'), 'utf8')).toBe('fe');
 });
 it('report_blocked tells the main, shows Blocked, and the next closed step clears it', async () => {
   const { s } = await boot();

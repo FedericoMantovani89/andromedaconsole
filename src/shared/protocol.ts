@@ -11,7 +11,7 @@ export type Profile = (typeof PROFILES)[number];
 export const USER_ERROR_CODES = [
   'slug.missing', 'slug.format', 'slug.length', 'slug.generic', 'slug.reserved', 'slug.duplicate',
   'profile.invalid', 'profile.fieldInvalid', 'profile.notFound', 'model.invalid', 'prereq.blocked', 'agent.spawnFailed',
-  'git.notRepo', 'git.alreadyRepo', 'git.noCommits', 'git.worktreeExists', 'project.testCommandInvalid', 'config.unreadable', 'review.useRequestReview', 'project.squashInvalid', 'recovery.useRecoveryTool',
+  'git.notRepo', 'git.alreadyRepo', 'git.noCommits', 'git.worktreeExists', 'project.testCommandInvalid', 'project.repoUnknown', 'config.unreadable', 'review.useRequestReview', 'project.squashInvalid', 'recovery.useRecoveryTool',
   'folder.pickBusy', 'project.duplicate', 'project.badRoot', 'project.badName', 'project.notFound',
   'install.busy', 'install.unavailable',
   'agent.notDormant', 'agent.notArchivable', 'agent.notArchived', 'agent.noSession', 'agent.noWorktree', 'agent.quotaHigh', 'agent.wakeFailed',
@@ -84,7 +84,7 @@ export interface StateMessage {
   type: 'state';
   /** The machine's queue of long test runs (shared by every project); absent while it is empty. */
   testQueue?: { running: { label: string; owner?: string }[]; waiting: { label: string; owner?: string; position: number }[] };
-  project: { name: string; /** What the console runs for the validation step of every ticket. */ testCommand?: string; /** Commands for single moments (`ticket`, `merge`, `release`); a missing one uses `testCommand`. */ testCommands?: { ticket?: string; merge?: string; release?: string }; /** What the project's files suggest (used while `testCommand` is empty). */ detectedTestCommand?: string; /** One commit per merged ticket (default true). */ squash?: boolean; /** The tests are switched off for this project: no test run, and the reports say so. */ testsDisabled?: boolean; /** The model this project's agents get (empty: the one of Options, Models). */ model?: string; /** The most agents running at once in this project. */ maxActive?: number };
+  project: { name: string; /** What the console runs for the validation step of every ticket. */ testCommand?: string; /** Commands for single moments (`ticket`, `merge`, `release`); a missing one uses `testCommand`. */ testCommands?: { ticket?: string; merge?: string; release?: string }; /** What the project's files suggest (used while `testCommand` is empty). */ detectedTestCommand?: string; /** The repository folder names of a project folder that holds several (`Ticket.repo`); empty for a folder that is one repository. */ repos: string[]; /** A command per repository (keyed by folder name), before every other. */ repoTestCommands?: Record<string, string>; /** What each repository's files suggest; a repository with nothing detected is left out. */ detectedRepoTestCommands?: Record<string, string>; /** One commit per merged ticket (default true). */ squash?: boolean; /** The tests are switched off for this project: no test run, and the reports say so. */ testsDisabled?: boolean; /** The model this project's agents get (empty: the one of Options, Models). */ model?: string; /** The most agents running at once in this project. */ maxActive?: number };
   /** What the Settings dialog shows; a change applies to sessions launched afterwards. */
   settings: { bypassPermissions: boolean; guardMode: 'enforce' | 'shadow'; worktrees: boolean };
   main: SessionInfo;

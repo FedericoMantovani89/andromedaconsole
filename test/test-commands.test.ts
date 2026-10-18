@@ -9,6 +9,7 @@ import { findTemplate } from '../src/server/templates/load';
 import { applyTemplate } from '../src/server/templates/apply';
 import { copyProjectSettings } from '../src/server/templates/copy';
 import { autoClose, bootServer, state, ui } from './helpers';
+import { makeMultiRepo, removeDir } from './git-helpers';
 
 vi.setConfig({ testTimeout: 60_000 });
 autoClose();
@@ -102,6 +103,79 @@ describe('testCommandFor in the folder a run happens in (a project folder that h
     expect(detected(be)).toMatch(/mvn test$/); // within 5 s: the kept answer
     now += 5_001;
     expect(detected(be)).toBeUndefined();
+  });
+});
+
+describe("a repository's own test command (repoTestCommands, keyed by the repository folder name)", () => {
+  it('the store keeps one per repository, trims, merges, clears with an empty string and touches no other field', () => {
+    const root = folder();
+    const s = new ProjectStore(root);
+    s.init('abc-website');
+    s.setTestCommands({ ticket: 'fast' });
+    s.setRepoTestCommands({ 'abc-be': '  mvn -q test ', 'abc-fe': 'npm test' }, ['abc-be', 'abc-fe']);
+    expect(new ProjectStore(root).project.repoTestCommands).toEqual({ 'abc-be': 'mvn -q test', 'abc-fe': 'npm test' });
+    s.setRepoTestCommands({ 'abc-fe': '' }, ['abc-be', 'abc-fe']);
+    expect(s.project.repoTestCommands).toEqual({ 'abc-be': 'mvn -q test' });
+    expect(s.project).toMatchObject({ name: 'abc-website', testCommands: { ticket: 'fast' } });
+    s.setRepoTestCommands({ 'abc-be': '' }, ['abc-be', 'abc-fe']);
+    expect(s.project.repoTestCommands).toBeUndefined();
+    expect(Object.keys(JSON.parse(readFileSync(join(root, '.andromedaconsole', 'project.json'), 'utf8'))).sort()).toEqual(['createdAt', 'name', 'testCommands']);
+  });
+  it('the store refuses a bad command or an unknown repository and changes nothing', () => {
+    const s = new ProjectStore(folder());
+    s.init('abc-website');
+    s.setRepoTestCommands({ 'abc-be': 'ok' }, ['abc-be', 'abc-fe']);
+    for (const bad of [{ 'abc-be': 'a\nb' }, { 'abc-fe': 'x'.repeat(501) }, { 'abc-be': 5 }, 'npm test', null, ['a'], { 'abc-fe': 'fine', 'abc-be': 'a\rb' }]) {
+      expect(() => s.setRepoTestCommands(bad as never, ['abc-be', 'abc-fe']), JSON.stringify(bad)).toThrow('project.testCommandInvalid');
+    }
+    expect(() => s.setRepoTestCommands({ 'abc-fe': 'npm test', 'abc-xx': 'x' }, ['abc-be', 'abc-fe'])).toThrow('project.repoUnknown');
+    expect(s.project.repoTestCommands).toEqual({ 'abc-be': 'ok' });
+    s.setRepoTestCommands({ gone: '' }, ['abc-be']); // a repository that left the folder can still be cleared
+    expect(s.project.repoTestCommands).toEqual({ 'abc-be': 'ok' });
+  });
+  it("testCommandFor: the repository's command beats the moment's, the single one and the detected one; the tests inhibited still win", () => {
+    const p = { testCommand: 'npm test', testCommands: { ticket: 'fast' }, repoTestCommands: { 'abc-be': ' mvn -q test ' } as Record<string, string> };
+    const d = { project: () => p, detected: (): string => 'detected' };
+    for (const m of ['ticket', 'merge', 'release'] as const) expect(testCommandFor(m, d, 'C:/wt', 'abc-be'), m).toBe('mvn -q test');
+    expect(testCommandFor('ticket', d, 'C:/wt', 'abc-fe')).toBe('fast'); // no command of its own: the project's
+    expect(testCommandFor('merge', d, 'C:/wt', 'abc-fe')).toBe('npm test');
+    expect(testCommandFor('ticket', d, 'C:/wt')).toBe('fast');
+    expect(testCommandFor('release', { project: () => ({ repoTestCommands: { 'abc-fe': '  ' } }), detected: () => 'detected' }, 'C:/wt', 'abc-fe')).toBe('detected');
+    expect(testCommandFor('ticket', { project: () => ({ ...p, testsDisabled: true }), detected: () => 'detected' }, 'C:/wt', 'abc-be')).toBeUndefined();
+  });
+  it('PUT /api/project sets and clears a repository command, the state lists the repositories with what each detects, and an unknown one is refused', async () => {
+    const m = makeMultiRepo(['abc-fe', 'abc-be']);
+    try {
+      writeFileSync(join(m.repos['abc-fe']!.repo, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
+      const s = await bootServer({ projectRoot: m.root });
+      const put = (body: unknown) => ui(s, '/api/project', 'PUT', body);
+      const before = (await state(s)).project;
+      expect(before.repos).toEqual(['abc-be', 'abc-fe']);
+      expect(before.detectedRepoTestCommands).toEqual({ 'abc-fe': 'npm test' }); // abc-be has no build file: left out, shown as n/a
+      expect(before.detectedTestCommand).toBeUndefined();
+      const r = await put({ repoTestCommands: { 'abc-be': 'mvn -q test' } });
+      expect(r.status).toBe(200);
+      expect(r.body).toEqual({ repoTestCommands: { 'abc-be': 'mvn -q test' } });
+      expect((await state(s)).project.repoTestCommands).toEqual({ 'abc-be': 'mvn -q test' });
+      const unknown = await put({ testCommand: 'changed', repoTestCommands: { 'abc-xx': 'x' } });
+      expect(unknown.status).toBe(422);
+      expect(unknown.body.code).toBe('project.repoUnknown');
+      const bad = await put({ repoTestCommands: { 'abc-fe': 'a\nb' } });
+      expect(bad.status).toBe(422);
+      expect(bad.body.code).toBe('project.testCommandInvalid');
+      expect((await ui(s, '/api/project?dryRun=1', 'PUT', { repoTestCommands: { 'abc-fe': 'x' } })).status).toBe(200);
+      expect((await state(s)).project).toMatchObject({ repoTestCommands: { 'abc-be': 'mvn -q test' } });
+      expect((await state(s)).project.testCommand).toBeUndefined(); // neither the refused nor the dry run wrote
+      expect((await put({ repoTestCommands: { 'abc-be': '' } })).body).toEqual({});
+      expect((await state(s)).project.repoTestCommands).toBeUndefined();
+    } finally { removeDir(m.base); }
+  });
+  it('a project folder that is the repository lists no repositories and refuses any repository command', async () => {
+    const s = await bootServer();
+    expect((await state(s)).project.repos).toEqual([]);
+    const r = await ui(s, '/api/project', 'PUT', { repoTestCommands: { 'abc-be': 'x' } });
+    expect(r.status).toBe(422);
+    expect(r.body.code).toBe('project.repoUnknown');
   });
 });
 

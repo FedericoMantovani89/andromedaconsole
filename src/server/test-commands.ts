@@ -23,17 +23,27 @@ export function detectedTestCommands(projectRoot: string, now: () => number = Da
 }
 
 /**
- * The test command the console runs at one moment: the project's command for that moment, else its single `testCommand`, else the one
- * detected from the files of `cwd` (the folder the run happens in; absent: the project folder). With the tests inhibited there is none
- * (every moment then runs nothing and the reports say "not run").
+ * The test command the console runs at one moment: the command of `repo` (the repository folder name of a folder that holds several,
+ * `Ticket.repo`) for every moment, else the project's command for that moment, else its single `testCommand`, else the one detected from
+ * the files of `cwd` (the folder the run happens in; absent: the project folder). With the tests inhibited there is none (every moment
+ * then runs nothing and the reports say "not run").
  */
 export function testCommandFor(
   moment: TestMoment,
-  d: { project(): Pick<ProjectInfo, 'testCommand' | 'testCommands' | 'testsDisabled'>; detected(cwd?: string): string | undefined },
+  d: { project(): Pick<ProjectInfo, 'testCommand' | 'testCommands' | 'repoTestCommands' | 'testsDisabled'>; detected(cwd?: string): string | undefined },
   cwd?: string,
+  repo?: string,
 ): string | undefined {
   let p: ReturnType<typeof d.project> = {};
   try { p = d.project(); } catch { /* a damaged project.json: as a project with no settings */ }
   if (p.testsDisabled === true) return undefined;
-  return p.testCommands?.[moment]?.trim() || p.testCommand?.trim() || d.detected(cwd);
+  const own = repo ? p.repoTestCommands?.[repo]?.trim() : undefined;
+  return own || p.testCommands?.[moment]?.trim() || p.testCommand?.trim() || d.detected(cwd);
+}
+
+/** The detail of a `no_test_command` refusal, for the agent to pass on: with a repository it names it and the option that sets its command. */
+export function noTestCommandDetail(repo: string | undefined): string {
+  return repo
+    ? `no test command was set for the repository ${repo} or for the project, and none was detected in ${repo} (no pom.xml, build.gradle or package.json test script): ask the main to set one in the console options (Options, Project, "test command of the repository ${repo}")`
+    : 'the project has no test command: ask the main to set it in the console options';
 }

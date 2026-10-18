@@ -5,6 +5,7 @@ import { buildReport, isDocFile, writeReport, type ChangedFile } from './report'
 import type { ReviewNote, Ticket, TicketStore, Verdict } from './store';
 import { runDirect, type TicketTestDeps } from './test-queue';
 import { KeyedQueue } from '../keyed-queue';
+import { noTestCommandDetail } from '../test-commands';
 
 export const MAX_REWORK_ROUNDS = 2;
 
@@ -149,8 +150,8 @@ export class ReviewService {
     const inhibited = this.d.testsDisabled?.() === true;
     let tests = !inhibited && ticket.tests && ticket.tests.sha === sha && !o.rerun ? ticket.tests : undefined;
     if (!tests && !inhibited) {
-      const command = this.d.testCommand(wt.worktree)?.trim();
-      if (!command) return { ok: false, code: 'no_test_command' };
+      const command = this.d.testCommand(wt.worktree, ticket.repo)?.trim();
+      if (!command) return { ok: false, code: 'no_test_command', detail: noTestCommandDetail(ticket.repo) };
       const head = await git(wt.worktree, ['rev-parse', 'HEAD']);
       if (head.code !== 0) return { ok: false, code: 'git_failed', detail: head.stderr.trim() };
       if (head.stdout.trim() !== sha) return { ok: false, code: 'head_moved', detail: `the branch is at ${head.stdout.trim().slice(0, 7)}, delivered ${sha.slice(0, 7)}` };

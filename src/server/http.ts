@@ -31,7 +31,8 @@ import type { LaunchWatch } from './agents/launch-watch';
 import { renderIndex } from './version';
 import type { UiAssets } from './ui-assets';
 import type { UpdateControl, UpdateState } from '../shared/update';
-import { isValidProjectField, isValidTestCommand, isValidTestCommands, type ProjectInfo, PROJECT_FIELDS, PROJECT_RANGES } from './project-store';
+import { isValidProjectField, isValidRepoTestCommands, isValidTestCommand, isValidTestCommands, type ProjectInfo, PROJECT_FIELDS, PROJECT_RANGES, unknownRepos } from './project-store';
+import { repoPathOf } from './git/repos';
 import { loadTemplates } from './templates/load';
 import { detectProject } from './templates/detect';
 import { saveTemplate } from './templates/save';
@@ -124,8 +125,8 @@ export interface Context extends V1Context {
   /** The budget thresholds and the default token limit, read at each launch. */
   readonly budgetConfig: Config['budget'];
   readonly guardMode: Config['guard']['mode'];
-  /** The test command the project's own files suggest (pom.xml, build.gradle, package.json); used while none is saved. */
-  detectedTestCommand(): string | undefined;
+  /** The test command a folder's files suggest (pom.xml, build.gradle, package.json): `cwd`, else the project folder; used while none is saved. */
+  detectedTestCommand(cwd?: string): string | undefined;
   /** A test seam: runs after an agent's worktree exists and before its process starts (a throw simulates a failed start). */
   afterWorktreeCreated?: (slug: string) => void | Promise<void>;
   getPrereq(): PrereqResult[] | null;
@@ -239,12 +240,16 @@ export function buildState(ctx: Context): StateMessage {
   let testCommand: string | undefined;
   let testsDisabled: boolean | undefined;
   let testCommands: ProjectInfo['testCommands'];
+  let repoTestCommands: ProjectInfo['repoTestCommands'];
   let squash: boolean | undefined;
   let model: string | undefined;
   let maxActive: number | undefined;
   let offeredProfiles: string[] | undefined;
-  try { ({ testCommand, testCommands, testsDisabled, squash, model, maxActive, profiles: offeredProfiles } = ctx.store.project); } catch { /* a damaged project.json: shown as not set */ }
+  try { ({ testCommand, testCommands, repoTestCommands, testsDisabled, squash, model, maxActive, profiles: offeredProfiles } = ctx.store.project); } catch { /* a damaged project.json: shown as not set */ }
   const repos = ctx.repos();
+  // A folder that holds several repositories: each one has its own row in Options, with what its own files suggest.
+  const repoNames = repos.filter((r) => r !== '');
+  const detectedRepos = Object.fromEntries(repoNames.flatMap((r) => { const d = ctx.detectedTestCommand(repoPathOf(ctx.projectRoot, r)); return d ? [[r, d]] : []; }));
   const worst = ctx.quotaState.worst();
   const slept = ctx.sleep.state();
   const installed = ctx.installer.state();
@@ -257,7 +262,7 @@ export function buildState(ctx: Context): StateMessage {
     ...(slept.phase !== 'awake' ? { sleep: { ...(slept.until !== undefined ? { until: slept.until } : {}), phase: slept.phase, attempt: slept.attempt, weekly: slept.kind === 'seven_day' } } : {}),
     // One project per console today: the stricter of the global and the per-project limit is the one that holds.
     limits: { active: ctx.scheduler.activeCount(), max: (({ global, perProject }) => Math.min(global, perProject))(ctx.scheduler.effectiveLimits()) },
-    type: 'state', project: { name: ctx.projectName, ...(testCommand ? { testCommand } : {}), ...(testCommands ? { testCommands } : {}), ...(ctx.detectedTestCommand() ? { detectedTestCommand: ctx.detectedTestCommand() } : {}), ...(squash !== undefined ? { squash } : {}), ...(testsDisabled ? { testsDisabled } : {}), ...(model ? { model } : {}), ...(maxActive !== undefined ? { maxActive } : {}) }, settings: { bypassPermissions: ctx.bypass, guardMode: ctx.guardMode, worktrees: ctx.git.worktrees }, main, agents, language: ctx.language, languages: [...ctx.bundles.keys()].sort(), profiles: pickableProfiles(offeredProfiles, profileNamesOf(ctx.projectRoot, join(dirname(ctx.configPath), 'profiles'))),
+    type: 'state', project: { name: ctx.projectName, ...(testCommand ? { testCommand } : {}), ...(testCommands ? { testCommands } : {}), ...(ctx.detectedTestCommand() ? { detectedTestCommand: ctx.detectedTestCommand() } : {}), repos: repoNames, ...(repoTestCommands ? { repoTestCommands } : {}), ...(Object.keys(detectedRepos).length > 0 ? { detectedRepoTestCommands: detectedRepos } : {}), ...(squash !== undefined ? { squash } : {}), ...(testsDisabled ? { testsDisabled } : {}), ...(model ? { model } : {}), ...(maxActive !== undefined ? { maxActive } : {}) }, settings: { bypassPermissions: ctx.bypass, guardMode: ctx.guardMode, worktrees: ctx.git.worktrees }, main, agents, language: ctx.language, languages: [...ctx.bundles.keys()].sort(), profiles: pickableProfiles(offeredProfiles, profileNamesOf(ctx.projectRoot, join(dirname(ctx.configPath), 'profiles'))),
     prereq: ctx.getPrereq(), helperUse: ctx.getHelperUse(), needsSetup: ctx.needsSetup(), projectIsRepo: repos.length > 0, repos, projectRoot: ctx.projectRoot,
     ...(() => { const rows = ctx.requests.rows(); return rows.length > 0 ? { requests: rows } : {}; })(),
     queue: ctx.questions.pending(),
@@ -605,14 +610,19 @@ export function createRequestHandler(source: Context | ProjectResolver, host: Ho
       const hasSquash = 'squash' in b;
       const hasTests = 'testsDisabled' in b;
       const hasMoments = 'testCommands' in b;
+      const hasRepos = 'repoTestCommands' in b;
       const knownProfiles = listProfileNames(ctx.projectRoot, join(dirname(ctx.configPath), 'profiles'));
       const projectFields = PROJECT_FIELDS.filter((f) => f in b); // Phase 6D: build/lint commands, profiles, model, budget, limit, docs, secrets
-      if (!hasCommand && !hasSquash && !hasTests && !hasMoments && projectFields.length === 0) return fail(res, 400, 'bad_request');
+      if (!hasCommand && !hasSquash && !hasTests && !hasMoments && !hasRepos && projectFields.length === 0) return fail(res, 400, 'bad_request');
       // Everything is checked before anything is written: a bad entry changes nothing.
       if (hasSquash && typeof b.squash !== 'boolean') return fail(res, 422, 'project.squashInvalid');
       if (hasTests && typeof b.testsDisabled !== 'boolean') return fail(res, 422, 'project.testsDisabledInvalid');
       if (hasCommand && !isValidTestCommand(b.testCommand)) return fail(res, 422, 'project.testCommandInvalid');
       if (hasMoments && !isValidTestCommands(b.testCommands)) return fail(res, 422, 'project.testCommandInvalid');
+      if (hasRepos && !isValidRepoTestCommands(b.repoTestCommands)) return fail(res, 422, 'project.testCommandInvalid');
+      const knownRepos = ctx.repos().filter((r) => r !== '');
+      const strangers = hasRepos ? unknownRepos(b.repoTestCommands as Record<string, string>, knownRepos) : [];
+      if (strangers.length > 0) return fail(res, 422, 'project.repoUnknown', { repos: strangers.join(', ') });
       for (const f of projectFields) {
         const v = typeof b[f] === 'string' ? (b[f] as string).trim() : b[f];
         const clears = v === null || v === '' || (Array.isArray(v) && v.length === 0);
@@ -625,12 +635,13 @@ export function createRequestHandler(source: Context | ProjectResolver, host: Ho
       if (new URL(req.url ?? '/', 'http://x').searchParams.get('dryRun') === '1') return send(res, 200, {}); // checked, nothing written
       if (hasCommand) ctx.store.setTestCommand(b.testCommand as string);
       if (hasMoments) ctx.store.setTestCommands(b.testCommands);
+      if (hasRepos) ctx.store.setRepoTestCommands(b.repoTestCommands, knownRepos);
       if (hasSquash) ctx.store.setSquash(b.squash as boolean);
       if (hasTests) ctx.store.setTestsDisabled(b.testsDisabled as boolean);
       if (projectFields.length > 0) ctx.store.setFields(Object.fromEntries(projectFields.map((f) => [f, b[f]])), knownProfiles);
       ctx.broadcastState();
       const saved = ctx.store.project;
-      return send(res, 200, { ...(hasCommand && saved.testCommand ? { testCommand: saved.testCommand } : {}), ...(hasMoments && saved.testCommands ? { testCommands: saved.testCommands } : {}), ...(hasSquash ? { squash: b.squash } : {}), ...(hasTests ? { testsDisabled: b.testsDisabled } : {}), ...Object.fromEntries(projectFields.filter((f) => saved[f] !== undefined).map((f) => [f, saved[f]])) });
+      return send(res, 200, { ...(hasCommand && saved.testCommand ? { testCommand: saved.testCommand } : {}), ...(hasMoments && saved.testCommands ? { testCommands: saved.testCommands } : {}), ...(hasRepos && saved.repoTestCommands ? { repoTestCommands: saved.repoTestCommands } : {}), ...(hasSquash ? { squash: b.squash } : {}), ...(hasTests ? { testsDisabled: b.testsDisabled } : {}), ...Object.fromEntries(projectFields.filter((f) => saved[f] !== undefined).map((f) => [f, saved[f]])) });
     }
 
     if (req.method === 'POST' && path === '/api/projects/save-template') {

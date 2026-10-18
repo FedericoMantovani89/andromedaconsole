@@ -143,8 +143,11 @@ export class TestQueue {
 export interface TicketTestDeps {
   project: string;
   worktreeOf(slug: string): { worktree: string; branch: string } | undefined;
-  /** The command for a run in `cwd`, the worktree it runs in (the detected command depends on that repository's files). */
-  testCommand(cwd?: string): string | undefined;
+  /**
+   * The command for a run in `cwd`, the worktree it runs in (the detected command depends on that repository's files), for the ticket's
+   * repository `repo` (its own command, set in the options, comes first).
+   */
+  testCommand(cwd?: string, repo?: string): string | undefined;
   testTimeoutMs(): number;
   /** Runs a test command through the machine's test queue (default: straight away). */
   runTests?: TestRunner;

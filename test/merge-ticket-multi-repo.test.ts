@@ -16,13 +16,14 @@ const bundles = loadBundles();
 let m: MultiRepo;
 let tickets: TicketStore;
 let svc: MergeService;
+let deps: ConstructorParameters<typeof MergeService>[0];
 let worktrees: Map<string, AgentGit>;
 
 beforeEach(() => {
   m = makeMultiRepo(['abc-fe', 'abc-be']);
   tickets = new TicketStore(m.root); // project state lives in the project folder, which is NOT a repository
   worktrees = new Map();
-  svc = new MergeService({
+  deps = {
     tickets, root: m.root, project: 'p',
     worktreeOf: (slug) => worktrees.get(slug),
     testCommand: () => undefined, testTimeoutMs: () => 30_000, squash: () => true,
@@ -30,7 +31,8 @@ beforeEach(() => {
     authorAlive: () => true,
     notifyMain: () => {}, notifyAuthor: () => {}, needsUser: () => {},
     finishAgent: async () => {},
-  });
+  };
+  svc = new MergeService(deps);
 });
 afterEach(() => removeDir(m.base));
 
@@ -68,6 +70,14 @@ it("merges a ticket of abc-fe into abc-fe's project branch, even though the proj
   expect(existsSync(wt)).toBe(false); // worktree removed
   expect(gitSync(fe, 'branch', '--list', branch)).toBe(''); // author branch deleted
   expect(gitSync(m.repos['abc-be']!.repo, 'branch', '--list', 'project/p')).toBe(''); // the other repo is untouched
+});
+it("asks for the test command with the ticket's repository, so its own command (set in the options) runs after the merge", async () => {
+  await approvedTicket('fe-job', 'abc-fe', { 'src/a.js': 'a\n' });
+  const asked: [string | undefined, string | undefined][] = [];
+  const own = new MergeService({ ...deps, testCommand: (cwd, repo) => { asked.push([cwd, repo]); return undefined; } });
+  expect(await own.mergeTicket('fe-job')).toMatchObject({ status: 'merged' });
+  expect(asked).toHaveLength(1);
+  expect(asked[0]![1]).toBe('abc-fe');
 });
 it('two tickets in two repos merge independently', async () => {
   await approvedTicket('fe-job', 'abc-fe', { 'f.js': 'f\n' });

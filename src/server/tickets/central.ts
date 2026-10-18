@@ -48,10 +48,10 @@ export interface CentralDeps {
   /** Told when the record file could not be read and was set aside. */
   report?: StateReport;
   tickets: { list(): CentralTicket[]; setCentral(slug: string, mark: CentralMark): unknown };
-  /** The `release` (full) command for a run in `cwd` (the repository's project worktree), or none when the tests are off. */
-  command(cwd?: string): string | undefined;
+  /** The `release` (full) command for a run in `cwd` (the repository's project worktree) of repository `repo`, or none when the tests are off. */
+  command(cwd?: string, repo?: string): string | undefined;
   /** The command a merge runs after merging in `cwd`: when it is the release command, the last merge already tested the tip. */
-  mergeCommand?(cwd?: string): string | undefined;
+  mergeCommand?(cwd?: string, repo?: string): string | undefined;
   timeoutMs(): number;
   /** How long after a merge the run waits for the next one (the quiet time that makes a batch). */
   settleMs: number;
@@ -153,7 +153,7 @@ export class CentralRun {
     const prep = await this.d.git.lock(rel, () => this.d.git.prepare(rel));
     if (!prep) return;
     // Asked in the repository's project worktree: in a folder of several repositories each one detects its own command.
-    const command = this.d.command(prep.path)?.trim();
+    const command = this.d.command(prep.path, rel || undefined)?.trim();
     if (!command) return;
     const tip = prep.tip;
     const before = this.record(rel);
@@ -163,7 +163,7 @@ export class CentralRun {
     const markAll = (): void => { for (const t of ordered) this.d.tickets.setCentral(t.slug, { checkedTip: tip }); };
 
     // With one test command for every moment, the merge of the last ticket already ran the whole suite on exactly this tip.
-    const mergeCommand = this.d.mergeCommand?.(prep.path)?.trim();
+    const mergeCommand = this.d.mergeCommand?.(prep.path, rel || undefined)?.trim();
     if (mergeCommand === command && ordered.length > 0 && ordered[ordered.length - 1]!.mergedSha === tip) {
       this.save(rel, { ...rec, reusedMerge: true });
       markAll();

@@ -123,7 +123,7 @@ it('PUT /api/project sets, shows and clears the test command', async () => {
   const r = await ui(s, '/api/project', 'PUT', { testCommand: '  npx vitest run ' });
   expect(r.status).toBe(200);
   expect(r.body).toEqual({ testCommand: 'npx vitest run' });
-  expect((await state(s)).project).toEqual({ name: 'shop-api', testCommand: 'npx vitest run' });
+  expect((await state(s)).project).toEqual({ name: 'shop-api', testCommand: 'npx vitest run', repos: [] }); // the folder is one repository: no repository rows
   expect((await ui(s, '/api/project', 'PUT', { testCommand: '' })).body).toEqual({});
   expect((await state(s)).project.testCommand).toBeUndefined();
 });

@@ -1,7 +1,7 @@
 import type { ApiError, PrereqResult, StateMessage } from '../shared/protocol';
 import { api } from './api';
 import { errorText } from './new-agent';
-import { bindText, k, language, retranslate, setLanguage, setTitle, t } from './i18n-client';
+import { bindText, k, language, retranslate, setLanguage, setPlaceholder, setTitle, t } from './i18n-client';
 import { closeOverlay, createLanguageSelect, renderPrereqTable } from './settings';
 import { openInstallDialog } from './install-dialog';
 import { infoIcon } from './info-icon';
@@ -397,8 +397,13 @@ function projectsTab(env: Env): HTMLElement {
   // Empty means "use what the project's files suggest": the placeholder shows it. Everything that explains the field (what runs it, what was
   // detected, what happens with no command) is in its (i) tooltip, not in lines under it.
   const detected = state?.project.detectedTestCommand;
+  const repos = state?.project.repos ?? [];
   if (detected) test.placeholder = detected;
-  testText.append(testName, detected ? infoIcon(k('settings.testCommand.tip.detected'), { command: detected }) : infoIcon(k('settings.testCommand.tip.none')));
+  // A folder of several repositories has no build file of its own: each repository detects its own command (its row below), so the
+  // project-wide field must not say that nothing was detected.
+  const testTip = detected ? infoIcon(k('settings.testCommand.tip.detected'), { command: detected })
+    : repos.length > 0 ? infoIcon(k('settings.testCommand.tip.repos')) : infoIcon(k('settings.testCommand.tip.none'));
+  testText.append(testName, testTip);
   testForm.append(testLabel);
   // The same command can be narrower at one moment (a fast, pointed run for a ticket, a smoke set after a merge); empty uses the one above.
   const momentInputs = (['ticket', 'merge', 'release'] as const).map((moment) => {
@@ -419,8 +424,29 @@ function projectsTab(env: Env): HTMLElement {
     testForm.append(label);
     return input;
   });
+  // A folder of several repositories: one command per repository, before every field above; the placeholder is what its files suggest.
+  const repoInputs = repos.map((repo) => {
+    const label = el('label');
+    const head = el('span', 'options-field-head');
+    const name = el('span');
+    bindText(name, 'settings.repoTestCommand', { repo });
+    head.append(name, infoIcon(k('settings.repoTestCommand.tip'), { repo }));
+    const input = el('input');
+    input.name = `repoTestCommands.${repo}`;
+    input.autocomplete = 'off';
+    input.value = state?.project.repoTestCommands?.[repo] ?? '';
+    const found = state?.project.detectedRepoTestCommands?.[repo];
+    if (found) input.placeholder = found; else setPlaceholder(input, k('common.notAvailable'));
+    input.addEventListener('change', () => {
+      const wanted = input.value;
+      env.stage(`project:repoTestCommands.${repo}`, (dry) => api<ApiError>(dry ? '/api/project?dryRun=1' : '/api/project', { method: 'PUT', body: { repoTestCommands: { [repo]: wanted } } }));
+    });
+    label.append(head, input);
+    testForm.append(label);
+    return input;
+  });
   // With the tests inhibited the command is not used: the field is disabled (and dimmed), its text is kept for when they come back.
-  const syncTests = (): void => { for (const i of [test, ...momentInputs]) i.disabled = off.checked; testForm.classList.toggle('is-off', off.checked); };
+  const syncTests = (): void => { for (const i of [test, ...momentInputs, ...repoInputs]) i.disabled = off.checked; testForm.classList.toggle('is-off', off.checked); };
   off.addEventListener('change', () => {
     const wanted = off.checked;
     env.stage('project:testsDisabled', (dry) => api<ApiError>(dry ? '/api/project?dryRun=1' : '/api/project', { method: 'PUT', body: { testsDisabled: wanted } }));

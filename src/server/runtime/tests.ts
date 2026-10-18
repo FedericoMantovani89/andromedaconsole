@@ -10,12 +10,13 @@ export function registerTests(c: ProjectContainer): void {
   c.provide('detectedTestCommand', (k) => detectedTestCommands(k.get('env').o.projectRoot));
   // With the tests inhibited there is no command at all: the merge, the release and the recovery then run nothing (they already skip an empty one).
   c.provide('testsDisabled', (k) => { const store = k.get('store'); return (): boolean => { try { return store.project.testsDisabled === true; } catch { return false; } }; });
-  // One command per moment: the project's own for `ticket` (validation step, review re-run, recovery), `merge` or `release`, else its single
-  // command, else the one detected in `cwd`, the repository folder the run happens in.
+  // One command per moment: the repository's own (`repo`, a folder of several repositories), else the project's own for `ticket`
+  // (validation step, review re-run, recovery), `merge` or `release`, else its single command, else the one detected in `cwd`, the
+  // repository folder the run happens in.
   c.provide('testCommandAt', (k) => {
     const store = k.get('store');
     const detectedTestCommand = k.get('detectedTestCommand');
-    return (moment: TestMoment) => (cwd?: string): string | undefined => testCommandFor(moment, { project: () => store.project, detected: detectedTestCommand }, cwd);
+    return (moment: TestMoment) => (cwd?: string, repo?: string): string | undefined => testCommandFor(moment, { project: () => store.project, detected: detectedTestCommand }, cwd, repo);
   });
   /**
    * The test runs go through the machine's queue. A run is heavy (it takes the queue's one slot) unless it is a `ticket` run with its own

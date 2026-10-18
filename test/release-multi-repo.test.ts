@@ -16,6 +16,7 @@ const bundles = loadBundles();
 let m: MultiRepo;
 let tickets: TicketStore;
 let svc: ReleaseService;
+let deps: ConstructorParameters<typeof ReleaseService>[0];
 let main: string[];
 let asked: { text: string; payload: any; answer: (a: string) => void }[];
 
@@ -24,13 +25,14 @@ beforeEach(async () => {
   for (const r of Object.values(m.repos)) await installReleaseHook(r.repo);
   tickets = new TicketStore(m.root); // the project folder is NOT a repository
   main = []; asked = [];
-  svc = new ReleaseService({
+  deps = {
     tickets, root: m.root, project: 'p',
     testCommand: () => undefined, testTimeoutMs: () => 30_000,
     language: () => ({ lang: 'en', t: createTranslator({ lang: 'en', messages: bundles.get('en') ?? {}, fallback: bundles.get('en') }) }),
     notifyMain: (text) => { main.push(text); },
     askConfirm: (q, onAnswer) => { asked.push({ ...q, answer: onAnswer }); return `q${asked.length}`; },
-  });
+  };
+  svc = new ReleaseService(deps);
 });
 afterEach(() => removeDir(m.base));
 
@@ -67,6 +69,13 @@ it('asks ONCE for both repos, with every ticket and the repos listed', async () 
   expect(p.tickets.map((t: any) => t.slug).sort()).toEqual(['be-job', 'fe-job']);
   expect(p.files.map((f: any) => f.path).sort()).toEqual(['abc-be/be-job.txt', 'abc-fe/fe-job.txt']);
   expect(p.branch).toBe('main');
+});
+it('asks for the test command with each repository name, so a repository with its own command (set in the options) runs that one', async () => {
+  await mergedTicket('fe-job', 'abc-fe'); await mergedTicket('be-job', 'abc-be');
+  const repos: (string | undefined)[] = [];
+  const own = new ReleaseService({ ...deps, testCommand: (_cwd, repo) => { repos.push(repo); return undefined; } });
+  expect(await own.proposeRelease()).toMatchObject({ status: 'asked' });
+  expect(repos.sort()).toEqual(['abc-be', 'abc-fe']);
 });
 it('a repo with no merged work is not in the confirmation', async () => {
   await mergedTicket('fe-job', 'abc-fe');

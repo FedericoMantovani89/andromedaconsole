@@ -107,6 +107,16 @@ describe('CentralRun', () => {
     expect(r.runs).toEqual([{ command: 'mvn test', cwd: 'P', label: 'central:p', heavy: true }]);
   });
 
+  it('names the repository when it asks for the command (its own command, set in the options, comes first)', async () => {
+    const r = rig({ tickets: [merged('a', 'sa', { repo: 'abc-be' })] });
+    const asked: [string | undefined, string | undefined][] = [];
+    const merges: [string | undefined, string | undefined][] = [];
+    const c = new CentralRun({ ...r.deps, command: (cwd, repo) => { asked.push([cwd, repo]); return 'mvn -q test'; }, mergeCommand: (cwd, repo) => { merges.push([cwd, repo]); return undefined; } });
+    await c.runNow();
+    expect(asked).toEqual([['P', 'abc-be']]);
+    expect(merges).toEqual([['P', 'abc-be']]);
+  });
+
   it('runs the suite on a checkout of the tip, never while holding the project lock (a merge is not blocked by it)', async () => {
     const r = rig({ tickets: [merged('a', 'sa')] });
     await r.c.runNow();

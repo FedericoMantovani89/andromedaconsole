@@ -15,6 +15,11 @@ export interface ProjectInfo {
   testCommand?: string;
   /** Optional command for one moment (`ticket`: validation step and review re-run; `merge`: after a merge; `release`: release); each falls back to `testCommand`. */
   testCommands?: TestCommands;
+  /**
+   * A project folder that holds several repositories: one command per repository, keyed by its folder name (`Ticket.repo`), for every
+   * moment; it comes before `testCommands` and `testCommand`.
+   */
+  repoTestCommands?: Record<string, string>;
   /** One commit per ticket when merged (default); false keeps the step commits behind a merge commit (SPEC 9.7). */
   squash?: boolean;
   /** The user switched the tests off for this project: nothing runs them and the reports say so (never "passed"). */
@@ -65,6 +70,14 @@ export const isValidTestCommand = (v: unknown): v is string => typeof v === 'str
 /** A `testCommands` patch: an object whose keys are moments and whose values are test commands (an empty string clears one). */
 export const isValidTestCommands = (v: unknown): v is Record<string, string> =>
   typeof v === 'object' && v !== null && !Array.isArray(v) && Object.entries(v).every(([k, c]) => (TEST_MOMENTS as readonly string[]).includes(k) && isValidTestCommand(c));
+
+/** A `repoTestCommands` patch: an object whose keys are repository folder names and whose values are test commands (an empty string clears one). */
+export const isValidRepoTestCommands = (v: unknown): v is Record<string, string> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) && Object.entries(v).every(([k, c]) => k !== '' && isValidTestCommand(c));
+
+/** The repositories a `repoTestCommands` patch sets a command for that are not among `repos` (clearing one that left the folder is allowed). */
+export const unknownRepos = (patch: Record<string, string>, repos: readonly string[]): string[] =>
+  Object.entries(patch).filter(([k, c]) => c.trim() !== '' && !repos.includes(k)).map(([k]) => k);
 
 /** A model alias or id: plain characters only, because it becomes a command-line argument (same rule as `MODEL_RE` in spawn.ts). */
 const PROJECT_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/;
@@ -131,6 +144,21 @@ export class ProjectStore {
       if (command.trim() === '') delete next[moment]; else next[moment] = command.trim();
     }
     writeJsonAtomic(this.projectFile, Object.keys(next).length === 0 ? rest : { ...rest, testCommands: next });
+  }
+
+  /**
+   * Sets (or, with an empty string, clears) the commands of single repositories of the folder; keys not mentioned keep their value. A
+   * command for a repository not in `repos` (the folder's repository names) throws `project.repoUnknown`. Checked before anything is written.
+   */
+  setRepoTestCommands(patch: unknown, repos: readonly string[]): void {
+    if (!isValidRepoTestCommands(patch)) throw new Error('project.testCommandInvalid');
+    if (unknownRepos(patch, repos).length > 0) throw new Error('project.repoUnknown');
+    const { repoTestCommands: old, ...rest } = this.project;
+    const next: Record<string, string> = { ...old };
+    for (const [repo, command] of Object.entries(patch)) {
+      if (command.trim() === '') delete next[repo]; else next[repo] = command.trim();
+    }
+    writeJsonAtomic(this.projectFile, Object.keys(next).length === 0 ? rest : { ...rest, repoTestCommands: next });
   }
 
   /** `true`: the project's tests are inhibited (no test run anywhere); `false` takes the field away, so the project is as any other. */
