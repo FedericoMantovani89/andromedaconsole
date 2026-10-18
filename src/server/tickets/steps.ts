@@ -98,6 +98,8 @@ export class StepService {
   stepDone(slug: string, o: StepInput): Promise<StepResult>;
   stepDone(slug: string, o: StepInput, opts: { waitMs?: number }): Promise<StepResult | StepRunning>;
   async stepDone(slug: string, o: StepInput, opts: { waitMs?: number } = {}): Promise<StepResult | StepRunning> {
+    // A call that collects a kept result or joins a running job brings nothing to it: its `note` and `tests` are those of the call
+    // that started the job, and a `tests` given on such a retry is not stored.
     const kept = this.unclaimed.get(slug);
     if (kept) {
       this.unclaimed.delete(slug);
@@ -130,6 +132,8 @@ export class StepService {
   /**
    * Only a closed step nobody waited for is kept for the next call: it cannot be done again. A refusal is not kept, because its cause
    * may be gone by the next call (the user switched the tests off, or set a test command), and that call works it out afresh.
+   * On purpose this includes a `validation_failed` that ends between two polls of the mod: it is dropped and the next call runs the
+   * suite again (slower, but its answer is current).
    */
   private finishJob(slug: string, job: StepJob, result: StepResult): StepResult {
     if (this.jobs.get(slug) === job) this.jobs.delete(slug);
