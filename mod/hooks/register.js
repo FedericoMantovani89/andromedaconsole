@@ -30,6 +30,7 @@ const RELEASE_QUESTION = /^\[release ([A-Za-z0-9-]{1,64})\] /;
 const RELEASE_ANSWERS = { Approve: 'approve', Reject: 'reject' };
 
 const POLL_MS = 2000;
+const RETRY_MAX_MS = 60000; // the longest wait between two tries of an inbox message the engine refused
 const QUESTION_WAIT_SECONDS = 15; // each long-poll stays short; the loop below repeats it (verified: 75 s total works)
 const MAX_CONSOLE_FAILURES = 20; // consecutive unreachable-console answers before a waiting tool gives up
 
@@ -62,28 +63,43 @@ function entered(/** @type {unknown} */ result) {
 /**
  * Delivers the console's messages (goals, answers) as new turns. The console forgets a message once it is acknowledged, so the ack
  * goes only after the engine took the prompt: a submit that throws or is dropped leaves it with the console, offered again next poll.
- * `delivered` holds what entered but whose ack the console has not confirmed: offered again, it is acknowledged, never submitted twice.
+ * `delivered` holds what entered but whose ack the console has not confirmed: offered again, it is acknowledged, not submitted twice
+ * (within this mod process: after a restart an entered message whose ack was lost can arrive twice).
+ * `retry` spaces out a message the engine keeps refusing (a hook that blocks plugin prompts, a host limit): 2 s, 4 s, 8 s ... at most
+ * 60 s between tries, so the user does not see a refusal every poll. It is never acknowledged, and the ones after it keep waiting.
  */
 function startInboxPoll(/** @type {Engine} */ $) {
   let busy = false;
   /** @type {Record<string, true>} */
   const delivered = {};
+  /** @type {Record<string, { tries: number, at: number }>} failed submits per message id, and when the next try may run */
+  let retry = {};
   $.clock.every(POLL_MS, async () => {
     if (busy || !ctx) return;
     busy = true;
     try {
       const r = await call($, 'GET', '/v1/inbox');
       const messages = r.ok && r.json && Array.isArray(r.json.messages) ? r.json.messages : [];
+      /** @type {Record<string, { tries: number, at: number }>} */
+      const kept = {};
+      for (const m of messages) { const id = String(m.id); if (retry[id]) kept[id] = retry[id]; }
+      retry = kept; // a message the console no longer offers needs no back-off
       for (const m of messages) {
         const id = String(m.id);
         if (!delivered[id]) {
+          const wait = retry[id];
+          const now = await $.clock.now();
+          if (wait && now < wait.at) break; // inside its back-off window: neither submitted nor acknowledged
           delivered[id] = true;
           let result;
           try { result = await $.prompt.submit({ text: String(m.text) }); } catch (err) { result = undefined; }
           if (!entered(result)) {
             delete delivered[id];
+            const tries = (wait ? wait.tries : 0) + 1;
+            retry[id] = { tries, at: now + Math.min(RETRY_MAX_MS, POLL_MS * Math.pow(2, tries - 1)) };
             break; // not taken: it stays with the console, and the ones after it wait so the order is kept
           }
+          delete retry[id];
         }
         const acked = await call($, 'POST', '/v1/ack', { id });
         if (acked.ok || acked.status === 404) delete delivered[id]; // 404: the console no longer holds it, nothing to confirm

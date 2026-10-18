@@ -40,10 +40,13 @@ function fake$(o: FakeOptions = {}) {
       },
     },
     tool: { register: async (spec: { name: string }) => { registeredTools.push(spec.name); } },
-    clock: { every: (_ms: number, fn: () => Promise<void> | void) => { ticks.push(fn); }, sleep: async () => {} },
+    clock: { every: (_ms: number, fn: () => Promise<void> | void) => { ticks.push(fn); }, sleep: async () => {}, now: async () => time },
     prompt: { submit: async ({ text }: { text: string }) => { submitted.push(text); calls.push('submit'); return o.submit ? o.submit(text) : { text }; } },
   };
-  return { $, calls, ticks, registeredTools, submitted };
+  let time = 1_000_000;
+  /** Moves the fake clock forward (`$.clock.now`). */
+  const advance = (ms: number) => { time += ms; };
+  return { $, calls, ticks, registeredTools, submitted, advance };
 }
 const next = vi.fn(async (e: unknown) => ({ next: e }));
 
@@ -113,6 +116,7 @@ it.each([
   await f.ticks[0]!();
   expect(c.acks).toEqual([]); // the console still holds both, and the order is kept: m2 waits behind m1
   expect(f.submitted).toEqual(['the question']);
+  f.advance(2000); // past the first back-off window
   await f.ticks[0]!();
   expect(f.submitted).toEqual(['the question', 'the question', 'later']);
   expect(c.acks).toEqual(['m1', 'm2']);
@@ -133,6 +137,92 @@ it('a message whose acknowledgement failed after it entered is acknowledged on t
   expect(c.box).toEqual([]);
   await f.ticks[0]!();
   expect(f.submitted).toEqual(['goal']);
+});
+it('a message the engine keeps refusing is retried with a growing back-off, never acknowledged, and holds the ones behind it', async () => {
+  const { find } = await loadMod();
+  const c = inboxConsole([{ id: 'm1', text: 'blocked' }, { id: 'm2', text: 'behind' }]);
+  const f = fake$({ fetch: c.fetch, submit: async () => ({ drop: 'a UserPromptSubmit hook blocks plugin prompts' }) });
+  await find('session.start')(f.$, {}, next);
+  const poll = async (ms: number) => { f.advance(ms); await f.ticks[0]!(); };
+  await f.ticks[0]!();
+  expect(f.submitted).toHaveLength(1); // t=0: first try, then a 2 s window
+  await poll(1000);
+  expect(f.submitted).toHaveLength(1); // t=1 s: inside the window, no resubmit
+  await poll(1000);
+  expect(f.submitted).toHaveLength(2); // t=2 s: retried, then a 4 s window
+  await poll(2000);
+  expect(f.submitted).toHaveLength(2); // t=4 s
+  await poll(2000);
+  expect(f.submitted).toHaveLength(3); // t=6 s: retried, then 8 s
+  await poll(7000);
+  expect(f.submitted).toHaveLength(3); // t=13 s
+  await poll(1000);
+  expect(f.submitted).toHaveLength(4); // t=14 s
+  for (let i = 0; i < 10; i++) await poll(60_000); // the window stops growing at 60 s: one try per minute
+  expect(f.submitted).toHaveLength(14);
+  expect(f.submitted.every((t) => t === 'blocked')).toBe(true);
+  expect(c.acks).toEqual([]);
+  expect(c.box.map((m) => m.id)).toEqual(['m1', 'm2']);
+});
+it('a success after failures delivers the message once and clears its back-off', async () => {
+  const { find } = await loadMod();
+  const c = inboxConsole([{ id: 'm1', text: 'first' }]);
+  let attempts = 0;
+  const f = fake$({ fetch: c.fetch, submit: async (text) => { attempts += 1; return attempts <= 2 ? { drop: 'busy' } : { text }; } });
+  await find('session.start')(f.$, {}, next);
+  await f.ticks[0]!();
+  f.advance(2000); await f.ticks[0]!(); // second failure: a 4 s window
+  f.advance(4000); await f.ticks[0]!(); // third try enters
+  expect(f.submitted).toEqual(['first', 'first', 'first']);
+  expect(c.acks).toEqual(['m1']);
+  expect(c.box).toEqual([]);
+  // The back-off was for m1 only: a new message enters at the next poll, with no wait.
+  c.box.push({ id: 'm2', text: 'second' });
+  attempts = 0;
+  (f.$ as any).prompt.submit = async ({ text }: { text: string }) => { f.submitted.push(text); return attempts++ === 0 ? { drop: 'busy' } : { text }; };
+  await f.ticks[0]!();
+  f.advance(2000); await f.ticks[0]!();
+  expect(f.submitted.slice(3)).toEqual(['second', 'second']);
+  expect(c.acks).toEqual(['m1', 'm2']);
+});
+it('an ack answered 404 (the console no longer holds the message) clears it and the next message goes on', async () => {
+  const { find } = await loadMod();
+  const box = [{ id: 'gone', text: 'old' }, { id: 'm2', text: 'next' }];
+  const acks: string[] = [];
+  const fetch = (url: string, init: { body?: string }) => {
+    if (url.endsWith('/v1/inbox')) return { ok: true, text: JSON.stringify({ messages: box }) };
+    if (url.endsWith('/v1/ack')) {
+      const id = JSON.parse(init.body ?? '{}').id as string;
+      acks.push(id);
+      const i = box.findIndex((m) => m.id === id);
+      box.splice(i, 1);
+      return id === 'gone' ? { ok: false, status: 404, text: '{"error":"not_found"}' } : { ok: true, status: 204, text: '' };
+    }
+    return { ok: true, text: '{}' };
+  };
+  const f = fake$({ fetch });
+  await find('session.start')(f.$, {}, next);
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['old', 'next']);
+  expect(acks).toEqual(['gone', 'm2']);
+  box.push({ id: 'gone', text: 'old' }); // offered again (another process): no longer remembered as delivered, so it enters again
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['old', 'next', 'old']);
+});
+it('an ack that fails in the middle of a list stops the loop there; the next poll acknowledges it without a second submit', async () => {
+  const { find } = await loadMod();
+  let ackCalls = 0;
+  const c = inboxConsole([{ id: 'm1', text: 'a' }, { id: 'm2', text: 'b' }, { id: 'm3', text: 'c' }], () => { ackCalls += 1; return ackCalls !== 2; }); // the first ack of m2 fails
+  const f = fake$({ fetch: c.fetch });
+  await find('session.start')(f.$, {}, next);
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['a', 'b']); // m3 was not touched
+  expect(c.acks).toEqual(['m1', 'm2']);
+  expect(c.box.map((m) => m.id)).toEqual(['m2', 'm3']);
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['a', 'b', 'c']); // b not again
+  expect(c.acks).toEqual(['m1', 'm2', 'm2', 'm3']);
+  expect(c.box).toEqual([]);
 });
 it('the acknowledgement is sent only after the submit resolved', async () => {
   const { find } = await loadMod();
