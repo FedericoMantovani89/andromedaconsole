@@ -176,8 +176,8 @@ it('resume_agent over /v1: bad_request without names; quota_high while the quota
   await quota(s, 96);
   await until(() => JSON.parse(readFileSync(ticketFile(projectRoot, 'job-one'), 'utf8')).status === 'suspended_limit');
   const resume = (body: unknown) => mod(s, 'shop-api', '/v1/tools/resume_agent', 'POST', body);
-  expect((await resume({})).body).toEqual({ status: 'error', code: 'bad_request' });
-  expect((await resume({ names: [] })).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await resume({})).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
+  expect((await resume({ names: [] })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   expect((await resume({ names: ['job-one'] })).body).toMatchObject({ status: 'refused', code: 'quota_high' });
   await quota(s, 10);
   await until(async () => (await state(s)).limits.max === 3);

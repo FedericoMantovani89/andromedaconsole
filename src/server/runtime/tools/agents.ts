@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { spawnAgent } from '../../agents/spawn';
 import { cleanupWorktree } from '../../git/cleanup';
 import type { Context } from '../../http';
+import { badRequest } from '../../tool-errors';
 import type { ProjectContainer } from '../services';
 
 /** The console tools that list, resume, clean up and spawn agents. */
@@ -39,14 +40,15 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
     resume_agent: async (_slug, body) => {
       const names = (body as { names?: unknown } | null)?.names;
       if (!Array.isArray(names) || names.length === 0 || names.length > 50 || !names.every((n): n is string => typeof n === 'string' && n !== '')) {
-        return { status: 'error', code: 'bad_request' };
+        return badRequest('names must be a list of 1 to 50 agent names');
       }
       return resumer.resume(names);
     },
     // Phase 6A, SPEC 9.9: the console saves the work, pushes the branch and only then removes the folder; never a branch.
     worktree_cleanup: async (_slug, body) => {
       const b = (typeof body === 'object' && body !== null ? body : {}) as { name?: unknown; action?: unknown };
-      if (typeof b.name !== 'string' || b.name === '' || b.action !== 'remove') return { status: 'error', code: 'bad_request' };
+      if (typeof b.name !== 'string' || b.name === '') return badRequest('name is required');
+      if (b.action !== 'remove') return badRequest('action must be "remove"');
       return cleanupWorktree({
         repo: registry.get(b.name)?.git?.repo ?? resolve(o.projectRoot), project: projectName, secretPatterns: secretPatterns(),
         agentGit: (s) => (registry.get(s)?.role === 'agent' ? registry.get(s)?.git : undefined),
@@ -57,12 +59,12 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
     },
     spawn_agent: async (_slug, body) => {
       const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
-      if (typeof b.name !== 'string' || typeof b.profile !== 'string' || typeof b.goal !== 'string' || b.goal.trim() === '') {
-        return { status: 'error', code: 'bad_request' };
-      }
+      if (typeof b.name !== 'string') return badRequest('name is required');
+      if (typeof b.profile !== 'string') return badRequest('profile is required');
+      if (typeof b.goal !== 'string' || b.goal.trim() === '') return badRequest('goal is required');
       // An optional token budget for this ticket: an integer between 1000 and 100 000 000, anything else is refused.
       if (b.budget !== undefined && !(typeof b.budget === 'number' && Number.isInteger(b.budget) && b.budget >= 1000 && b.budget <= 100_000_000)) {
-        return { status: 'error', code: 'bad_request' };
+        return badRequest('budget must be a whole number between 1000 and 100000000');
       }
       const out = await spawnAgent(k.get('ctx'), { slug: b.name, profile: b.profile, goal: b.goal, model: typeof b.model === 'string' ? b.model : undefined, source: 'main', ...(b.budget !== undefined ? { budget: b.budget as number } : {}), ...(typeof b.repo === 'string' ? { repo: b.repo } : {}) });
       if (!out.ok) return { status: 'error', code: out.code, ...(out.params ? { params: out.params } : {}) };

@@ -1,4 +1,5 @@
 import { describeKey } from '../../questions/describe';
+import { badRequest } from '../../tool-errors';
 import type { Context } from '../../http';
 import type { ProjectContainer } from '../services';
 
@@ -10,7 +11,7 @@ export function messageTools(k: ProjectContainer): Pick<Context['tools'], 'ask_u
   return {
     ask_user: async (slug, body) => {
       const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
-      if (typeof b.question !== 'string' || b.question.trim() === '') return { status: 'error', code: 'bad_request' };
+      if (typeof b.question !== 'string' || b.question.trim() === '') return badRequest('question is required');
       const options = Array.isArray(b.options) ? b.options.filter((o): o is string => typeof o === 'string').slice(0, 8).map((o) => o.slice(0, 200)) : undefined;
       const permission = b.kind === 'permission';
       const tool = typeof b.tool === 'string' ? b.tool : '';

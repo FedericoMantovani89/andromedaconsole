@@ -157,7 +157,7 @@ it('a spawn_agent budget that is not an integer between 1000 and 100 000 000 is 
   repos.push(t);
   const s = await bootServer({ projectRoot: t.repo, config: { git: { worktrees: true } } });
   for (const budget of [12.5, 999, 100_000_001, '5000']) {
-    expect((await mod(s, 'shop-api', '/v1/tools/spawn_agent', 'POST', { name: SLUG, profile: 'developer', goal: 'go', budget })).body, String(budget)).toEqual({ status: 'error', code: 'bad_request' });
+    expect((await mod(s, 'shop-api', '/v1/tools/spawn_agent', 'POST', { name: SLUG, profile: 'developer', goal: 'go', budget })).body, String(budget)).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   }
   expect((await state(s)).agents).toEqual([]);
 });

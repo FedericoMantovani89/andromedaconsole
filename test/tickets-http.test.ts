@@ -44,11 +44,11 @@ it('the three ticket tools are agent-only; a bad or missing token is refused', a
 it('malformed bodies come back as bad_request, not as a crash', async () => {
   const { s } = await boot();
   await spawn(s);
-  expect((await tool(s, 'fix-login', 'checklist_set', {})).body).toEqual({ status: 'error', code: 'bad_request' });
-  expect((await tool(s, 'fix-login', 'checklist_set', { items: 'nope' })).body).toEqual({ status: 'error', code: 'bad_request' });
-  expect((await tool(s, 'fix-login', 'step_done', { n: '1' })).body).toEqual({ status: 'error', code: 'bad_request' });
-  expect((await tool(s, 'fix-login', 'step_done', { n: 1.5 })).body).toEqual({ status: 'error', code: 'bad_request' });
-  expect((await tool(s, 'fix-login', 'report_blocked', { reason: '   ' })).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await tool(s, 'fix-login', 'checklist_set', {})).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
+  expect((await tool(s, 'fix-login', 'checklist_set', { items: 'nope' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
+  expect((await tool(s, 'fix-login', 'step_done', { n: '1' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
+  expect((await tool(s, 'fix-login', 'step_done', { n: 1.5 })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
+  expect((await tool(s, 'fix-login', 'report_blocked', { reason: '   ' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
 });
 it('a rejected checklist says why; a good one is stored and shows as progress in the state', async () => {
   const { s } = await boot();

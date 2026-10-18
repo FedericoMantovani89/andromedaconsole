@@ -3,6 +3,7 @@ import type { Activity } from '../../shared/activity';
 import type { EscalationReason, RequestRow, RequestsInfo } from '../../shared/requests';
 import type { Role } from '../agents/registry';
 import type { TicketStatus } from '../tickets/flow';
+import { badRequest } from '../tool-errors';
 import type { RequestRecord, RequestStore } from './store';
 import { answeredAfterAllText, answerText, cancelledText, escalatedText, infoText, passedOnText, questionText } from './texts';
 
@@ -22,7 +23,7 @@ export type SendRefusal =
 export type SendResult =
   | { status: 'ok'; requestId?: string; escalated?: EscalationReason }
   | { status: 'refused'; code: SendRefusal; detail?: string }
-  | { status: 'error'; code: 'bad_request' };
+  | { status: 'error'; code: 'bad_request'; detail: string };
 export type WaitResult = { ok: true } | { ok: false; detail: string };
 
 export interface RequestDeps {
@@ -45,7 +46,6 @@ export interface RequestDeps {
   changed(): void;
 }
 
-const BAD: SendResult = { status: 'error', code: 'bad_request' };
 const refuse = (code: SendRefusal, detail?: string): SendResult => ({ status: 'refused', code, ...(detail ? { detail } : {}) });
 
 /**
@@ -59,19 +59,20 @@ export class RequestService {
   async send(from: string, body: unknown): Promise<SendResult> {
     const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
     const type = b.type as MessageType;
-    if (!TYPES.includes(type)) return BAD;
+    if (!TYPES.includes(type)) return badRequest(`type must be one of ${TYPES.join(', ')}`);
     const text = typeof b.text === 'string' ? b.text.trim() : '';
     if (text.length > MAX_TEXT) return refuse('text_too_long', `at most ${MAX_TEXT} characters`);
     if (type === 'question' || type === 'info') {
-      if (typeof b.to !== 'string' || b.to === '' || text === '') return BAD;
+      if (typeof b.to !== 'string' || b.to === '') return badRequest(`to is required for type "${type}"`);
+      if (text === '') return badRequest('text is required');
       if (type === 'info') return this.info(from, b.to, text);
-      if (b.step !== undefined && !(typeof b.step === 'number' && Number.isInteger(b.step) && b.step >= 1)) return BAD;
-      if (b.because !== undefined && typeof b.because !== 'string') return BAD;
+      if (b.step !== undefined && !(typeof b.step === 'number' && Number.isInteger(b.step) && b.step >= 1)) return badRequest('step must be a whole number of 1 or more');
+      if (b.because !== undefined && typeof b.because !== 'string') return badRequest('because must be a request id');
       return this.question(from, b.to, text, b.step as number | undefined, b.because as string | undefined);
     }
-    if (typeof b.in_reply_to !== 'string' || b.in_reply_to === '') return BAD;
-    if (type === 'answer') return text === '' ? BAD : this.answer(from, b.in_reply_to, text);
-    if (type === 'escalate' && text === '') return BAD;
+    if (typeof b.in_reply_to !== 'string' || b.in_reply_to === '') return badRequest(`in_reply_to is required for type "${type}"`);
+    if (type === 'answer') return text === '' ? badRequest('text is required') : this.answer(from, b.in_reply_to, text);
+    if (type === 'escalate' && text === '') return badRequest('text is required');
     return this.passUp(from, b.in_reply_to, type === 'unknown' ? 'unknown' : 'explicit', text);
   }
 

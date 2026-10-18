@@ -214,7 +214,7 @@ describe('report', () => {
       { ...REPORT, remedy: 'banana' }, { ...REPORT, diagnosis: '  ' }, { ...REPORT, diagnosis: 'x'.repeat(4001) },
       { ...REPORT, verified_steps: ['one'] }, { ...REPORT, verified_steps: [1.5] }, { remedy: 'split' }, null,
     ]) {
-      expect(await svc.report(rec, body), JSON.stringify(body)?.slice(0, 80)).toEqual({ ok: false, code: 'bad_request' });
+      expect(await svc.report(rec, body), JSON.stringify(body)?.slice(0, 80)).toEqual({ ok: false, code: 'bad_request', detail: expect.any(String) });
     }
     expect(tickets.get('a-job')!.status).toBe('recovering');
     expect(ended).toEqual([]);

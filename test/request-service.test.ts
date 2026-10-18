@@ -71,8 +71,10 @@ describe('a question', () => {
     expect(await ask('fe-pages', 'nobody')).toMatchObject({ status: 'refused', code: 'unknown_recipient' });
     expect(await ask('fe-pages', 'rev-1')).toMatchObject({ status: 'refused', code: 'not_peer' });
     expect(await svc.send('fe-pages', { type: 'question', to: 'be-orders', text: 'x'.repeat(8001) })).toMatchObject({ status: 'refused', code: 'text_too_long' });
-    expect(await svc.send('fe-pages', { type: 'question', to: 'be-orders', text: '  ' })).toEqual({ status: 'error', code: 'bad_request' });
-    expect(await svc.send('fe-pages', { type: 'chat', to: 'be-orders', text: 'x' })).toEqual({ status: 'error', code: 'bad_request' });
+    expect(await svc.send('fe-pages', { type: 'question', to: 'be-orders', text: '  ' })).toEqual({ status: 'error', code: 'bad_request', detail: 'text is required' });
+    expect(await svc.send('fe-pages', { type: 'chat', to: 'be-orders', text: 'x' })).toEqual({ status: 'error', code: 'bad_request', detail: 'type must be one of question, answer, info, unknown, escalate' });
+    expect(await svc.send('fe-pages', { type: 'question', text: 'x' })).toEqual({ status: 'error', code: 'bad_request', detail: 'to is required for type "question"' });
+    expect(await svc.send('be-orders', { type: 'answer', in_reply_to: 'TODO-ffffff', text: ' ' })).toEqual({ status: 'error', code: 'bad_request', detail: 'text is required' });
     expect(store.list()).toEqual([]);
     expect(sent).toEqual([]);
   });
@@ -84,7 +86,8 @@ describe('a question', () => {
     expect(sent).toEqual([]);
   });
   it('a step needs a whole number from an agent; the main has no checklist', async () => {
-    expect(await ask('fe-pages', 'be-orders', { step: 'three' })).toEqual({ status: 'error', code: 'bad_request' });
+    expect(await ask('fe-pages', 'be-orders', { step: 'three' })).toEqual({ status: 'error', code: 'bad_request', detail: 'step must be a whole number of 1 or more' });
+    expect(await ask('fe-pages', 'be-orders', { because: 7 })).toEqual({ status: 'error', code: 'bad_request', detail: 'because must be a request id' });
     expect(await ask(MAIN, 'be-orders', { step: 3 })).toMatchObject({ status: 'refused', code: 'bad_step' });
   });
   it('a question to an unreachable agent goes to the main at once (reviewer is refused, the others are unreachable)', async () => {
@@ -205,7 +208,7 @@ describe('answering', () => {
     expect(await svc.send(MAIN, { type: 'answer', in_reply_to: idOf(r), text: 'third' })).toMatchObject({ status: 'refused', code: 'already_closed' });
     expect(sent).toHaveLength(count);
     expect(await svc.send('be-orders', { type: 'answer', in_reply_to: 'TODO-ffffff', text: 'x' })).toMatchObject({ status: 'refused', code: 'unknown_request' });
-    expect(await svc.send('be-orders', { type: 'answer', text: 'x' })).toEqual({ status: 'error', code: 'bad_request' });
+    expect(await svc.send('be-orders', { type: 'answer', text: 'x' })).toEqual({ status: 'error', code: 'bad_request', detail: 'in_reply_to is required for type "answer"' });
   });
   it('the main may answer any open request, and the one it received after an escalation', async () => {
     const r = await ask('fe-pages', 'be-orders');
@@ -249,7 +252,7 @@ describe('answering', () => {
     const b = await ask('fe-pages', 'be-orders');
     expect(await svc.send('be-orders', { type: 'escalate', in_reply_to: idOf(b), text: 'a product choice' })).toEqual({ status: 'ok' });
     expect(store.get(idOf(b))).toMatchObject({ escalatedBy: 'explicit' });
-    expect(await svc.send('be-orders', { type: 'escalate', in_reply_to: idOf(b) })).toEqual({ status: 'error', code: 'bad_request' });
+    expect(await svc.send('be-orders', { type: 'escalate', in_reply_to: idOf(b) })).toEqual({ status: 'error', code: 'bad_request', detail: 'text is required' });
     const c = await ask('fe-pages', MAIN);
     expect(await svc.send(MAIN, { type: 'unknown', in_reply_to: idOf(c) })).toMatchObject({ status: 'refused', code: 'top_of_chain' });
   });

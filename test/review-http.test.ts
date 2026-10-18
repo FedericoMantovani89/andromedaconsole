@@ -62,7 +62,7 @@ it('the review tools belong to their roles', async () => {
   expect((await tool(s, 'shop-api', 'merge_ticket', { name: 'fix-login' })).status).not.toBe(403);
   // send_back_ticket: only the main, and it needs a note (what it does with a note is in review.test.ts and the state test below)
   expect((await tool(s, 'fix-login', 'send_back_ticket', { name: 'fix-login', note: 'x' })).status).toBe(403);
-  expect((await tool(s, 'shop-api', 'send_back_ticket', { name: 'fix-login' })).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await tool(s, 'shop-api', 'send_back_ticket', { name: 'fix-login' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   expect((await tool(s, 'shop-api', 'send_back_ticket', { name: 'fix-login', note: '  ' })).body).toMatchObject({ status: 'refused', code: 'notes_required' });
 });
 it('ticket_report gives the main the console\'s facts and the report text', async () => {
@@ -76,7 +76,7 @@ it('ticket_report gives the main the console\'s facts and the report text', asyn
   expect(r.body.report).toContain('Fix the login so negative ids are rejected');
   expect(existsSync(join(t.repo, '.andromedaconsole', 'tickets', 'fix-login', 'report.md'))).toBe(true);
   expect((await tool(s, 'shop-api', 'ticket_report', { name: 'nobody' })).body).toMatchObject({ status: 'refused', code: 'not_delivered' });
-  expect((await tool(s, 'shop-api', 'ticket_report', {})).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await tool(s, 'shop-api', 'ticket_report', {})).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
 });
 it('spawn_agent cannot start a reviewer by itself: request_review is the way', async () => {
   const { s } = await boot();
@@ -176,7 +176,7 @@ it('the whole pipeline: delivered, reviewed, approved, merged into the project b
   // the reviewer is ended a moment after it spoke, and its checkout goes
   await until(async () => (await agentsOf(s)).find((a) => a.slug === 'review-fix-login')?.state === 'finished', 20_000);
   await until(() => !existsSync(worktreePathFor(t.repo, 'review-fix-login')), 20_000);
-  expect((await tool(s, 'shop-api', 'merge_ticket', {})).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await tool(s, 'shop-api', 'merge_ticket', {})).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   const before = Number(gitSync(t.repo, 'rev-list', '--count', 'project/shop-api'));
   const r = await tool(s, 'shop-api', 'merge_ticket', { name: 'fix-login' });
   expect(r.body).toMatchObject({ status: 'merged' });

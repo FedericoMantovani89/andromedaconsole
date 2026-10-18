@@ -59,7 +59,7 @@ export type VerdictResult =
   | { ok: true; ticket: string; outcome: 'approved' }
   | { ok: true; ticket: string; outcome: 'sent_back'; round: number }
   | { ok: true; ticket: string; outcome: 'needs_user' }
-  | { ok: false; code: 'not_reviewer' | 'bad_request' | 'notes_required' };
+  | { ok: false; code: 'not_reviewer' | 'bad_request' | 'notes_required'; detail?: string };
 
 const FOREIGN = [/(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock)$/, /^(dist|build|out|coverage|node_modules|target|\.venv)\//, /\.(log|tmp|class|pyc|swp)$/];
 const REVIEWABLE = ['delivered', 'in_review', 'approved'];
@@ -241,9 +241,9 @@ export class ReviewService {
     const found = this.d.tickets.list().find((t) => t.status === 'in_review' && t.reviewer === reviewer);
     if (!found) return { ok: false, code: 'not_reviewer' };
     const b = (typeof body === 'object' && body !== null ? body : {}) as { pass?: unknown; notes?: unknown };
-    if (typeof b.pass !== 'boolean') return { ok: false, code: 'bad_request' };
+    if (typeof b.pass !== 'boolean') return { ok: false, code: 'bad_request', detail: 'pass is required and must be true or false' };
     const notes = normalizeNotes(b.notes);
-    if (!notes) return { ok: false, code: 'bad_request' };
+    if (!notes) return { ok: false, code: 'bad_request', detail: 'notes must be a list of { severity, where, text }' };
     if (!b.pass && notes.length === 0) return { ok: false, code: 'notes_required' };
 
     return this.queue.run(found.slug, async () => {

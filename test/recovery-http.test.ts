@@ -63,7 +63,7 @@ it('start_recovery: a read-only recovery on the WIP commit; its report restarts 
   const { s, t, wt, wip } = await stopped();
   expect(gitSync(wt, 'log', '-1', '--format=%s')).toMatch(/^wip: budget/); // the half-done work is committed
   expect((await tool(s, SLUG, 'start_recovery', { name: SLUG })).status).toBe(401); // the stopped agent has no session any more
-  expect((await tool(s, 'shop-api', 'start_recovery', {})).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await tool(s, 'shop-api', 'start_recovery', {})).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
 
   const r = await tool(s, 'shop-api', 'start_recovery', { name: SLUG });
   expect(r.body).toEqual({ status: 'ok', recovery: 'recover-fix-login', attempt: 1 });
@@ -84,7 +84,7 @@ it('start_recovery: a read-only recovery on the WIP commit; its report restarts 
   expect((await mod(s, 'recover-fix-login', '/v1/guard', 'POST', { tool: 'Bash', input: { command: `git diff project/shop-api...HEAD` } })).body).toEqual({ decision: 'allow' });
   for (const name of ['step_done', 'checklist_set', 'spawn_agent', 'review_verdict', 'start_recovery']) expect((await tool(s, 'recover-fix-login', name, {})).status, name).toBe(403);
   expect((await tool(s, SLUG, 'recovery_report', {})).status).not.toBe(200);
-  expect((await tool(s, 'recover-fix-login', 'recovery_report', { verified_steps: [1], diagnosis: 'x', remedy: 'banana' })).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await tool(s, 'recover-fix-login', 'recovery_report', { verified_steps: [1], diagnosis: 'x', remedy: 'banana' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   // a second recovery for the same ticket is refused while this one runs
   expect((await tool(s, 'shop-api', 'start_recovery', { name: SLUG })).body).toEqual({ status: 'refused', code: 'not_stopped' });
 

@@ -8,6 +8,7 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+- Fixed: a `bad_request` from a console tool (`send_message`, `merge_ticket`, `spawn_agent` and the others) now carries a `detail` sentence that names the missing or wrong field (for example `in_reply_to is required for type "answer"`); `code` is unchanged.
 - Added: `list_agents` shows the main the release request that waits for the user (`release: { id, status: 'pending' }`), so it neither asks again nor forgets it.
 - Tests: a pending release confirmation is pinned to raise one desktop notice titled "Release to approve" (the queue badge and notice already existed).
 - Fixed: a release request that is no longer in the queue is asked again instead of answering "already asked".

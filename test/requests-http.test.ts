@@ -105,7 +105,7 @@ it('refusals come back as codes; a reviewer cannot use the tool; a bad body is b
   expect((await tool(s, 'fe-pages', 'send_message', { type: 'question', to: 'fe-pages', text: 'x' })).body).toMatchObject({ status: 'refused', code: 'self' });
   expect((await tool(s, 'fe-pages', 'send_message', { type: 'question', to: 'nobody', text: 'x' })).body).toMatchObject({ status: 'refused', code: 'unknown_recipient' });
   expect((await tool(s, 'fe-pages', 'send_message', { type: 'question', to: 'be-orders', text: 'x', step: 6 })).body).toMatchObject({ status: 'refused', code: 'bad_step' });
-  expect((await tool(s, 'fe-pages', 'send_message', { nonsense: true })).body).toEqual({ status: 'error', code: 'bad_request' });
+  expect((await tool(s, 'fe-pages', 'send_message', { nonsense: true })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   expect((await ui(s, '/v1/tools/send_message', 'POST', {})).status).toBe(401);
 });
 

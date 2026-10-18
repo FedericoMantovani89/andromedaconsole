@@ -66,7 +66,7 @@ export type StartRecoveryResult =
   | { ok: false; code: 'not_stopped' | 'too_many' | 'no_worktree' | 'spawn_failed' | 'no_test_command'; detail?: string };
 export type RecoveryReportResult =
   | { ok: true; ticket: string; outcome: 'restarted' | 'asked_user' | 'needs_user' }
-  | { ok: false; code: 'not_recovery' | 'bad_request' };
+  | { ok: false; code: 'not_recovery' | 'bad_request'; detail?: string };
 export type RestartResult = { ok: true; agent: string } | { ok: false; code: 'not_stopped' | 'spawn_failed'; detail?: string };
 
 type StopStatus = 'suspended_budget' | 'blocked';
@@ -223,16 +223,17 @@ export function replacementGoal(i: { from: string; project: string; ticket: Tick
   return lines.join('\n');
 }
 
-function parseReport(body: unknown): RecoveryReport | undefined {
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined;
+/** The parsed report, or `{ detail }`: the sentence that tells the agent which field to fix. */
+function parseReport(body: unknown): RecoveryReport | { detail: string } {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return { detail: 'the report must be an object with verified_steps, diagnosis and remedy' };
   const b = body as Record<string, unknown>;
-  if (!Array.isArray(b.verified_steps) || b.verified_steps.length > MAX_STEPS) return undefined;
-  if (!b.verified_steps.every((n) => typeof n === 'number' && Number.isInteger(n) && n >= 1)) return undefined;
-  if (typeof b.diagnosis !== 'string') return undefined;
+  if (!Array.isArray(b.verified_steps) || b.verified_steps.length > MAX_STEPS) return { detail: `verified_steps must be a list of at most ${MAX_STEPS} step numbers` };
+  if (!b.verified_steps.every((n) => typeof n === 'number' && Number.isInteger(n) && n >= 1)) return { detail: 'verified_steps must contain whole step numbers of 1 or more' };
+  if (typeof b.diagnosis !== 'string') return { detail: 'diagnosis is required' };
   const diagnosis = b.diagnosis.trim();
-  if (diagnosis.length < 1 || diagnosis.length > MAX_DIAGNOSIS) return undefined;
-  if (typeof b.remedy !== 'string' || !(REMEDIES as readonly string[]).includes(b.remedy)) return undefined;
-  if (b.notes !== undefined && typeof b.notes !== 'string') return undefined;
+  if (diagnosis.length < 1 || diagnosis.length > MAX_DIAGNOSIS) return { detail: `diagnosis must be 1 to ${MAX_DIAGNOSIS} characters` };
+  if (typeof b.remedy !== 'string' || !(REMEDIES as readonly string[]).includes(b.remedy)) return { detail: `remedy must be one of ${REMEDIES.join(', ')}` };
+  if (b.notes !== undefined && typeof b.notes !== 'string') return { detail: 'notes must be text' };
   const notes = typeof b.notes === 'string' && b.notes.trim() !== '' ? b.notes.trim().slice(0, MAX_NOTES) : undefined;
   return { verifiedSteps: [...new Set(b.verified_steps as number[])].sort((x, y) => x - y), diagnosis, remedy: b.remedy as Remedy, ...(notes ? { notes } : {}) };
 }
@@ -290,7 +291,7 @@ export class RecoveryService {
     const entry = this.active.get(slug);
     if (!entry) return { ok: false, code: 'not_recovery' };
     const report = parseReport(body);
-    if (!report) return { ok: false, code: 'bad_request' };
+    if ('detail' in report) return { ok: false, code: 'bad_request', detail: report.detail };
     let accepted = false;
     try {
       return await this.queue.run(entry.ticket, async (): Promise<RecoveryReportResult> => {
