@@ -54,9 +54,20 @@ async function postEvent(/** @type {Engine} */ $, /** @type {string} */ type, /*
   await call($, 'POST', '/v1/events', { type, sessionId: ctx.sid, data });
 }
 
-/** Delivers the console's messages (goals, answers) as new turns; acknowledges before injecting so none repeats. */
+/** True when the engine says the prompt entered the session (its turn started or it was queued behind the running one). */
+function entered(/** @type {unknown} */ result) {
+  return typeof result === 'object' && result !== null && /** @type {{ drop?: unknown }} */ (result).drop === undefined;
+}
+
+/**
+ * Delivers the console's messages (goals, answers) as new turns. The console forgets a message once it is acknowledged, so the ack
+ * goes only after the engine took the prompt: a submit that throws or is dropped leaves it with the console, offered again next poll.
+ * `delivered` holds what entered but whose ack the console has not confirmed: offered again, it is acknowledged, never submitted twice.
+ */
 function startInboxPoll(/** @type {Engine} */ $) {
   let busy = false;
+  /** @type {Record<string, true>} */
+  const delivered = {};
   $.clock.every(POLL_MS, async () => {
     if (busy || !ctx) return;
     busy = true;
@@ -64,9 +75,19 @@ function startInboxPoll(/** @type {Engine} */ $) {
       const r = await call($, 'GET', '/v1/inbox');
       const messages = r.ok && r.json && Array.isArray(r.json.messages) ? r.json.messages : [];
       for (const m of messages) {
-        const acked = await call($, 'POST', '/v1/ack', { id: m.id });
-        if (!acked.ok) break; // not confirmed: the console will offer it again, and injecting now would deliver it twice
-        await $.prompt.submit({ text: m.text });
+        const id = String(m.id);
+        if (!delivered[id]) {
+          delivered[id] = true;
+          let result;
+          try { result = await $.prompt.submit({ text: String(m.text) }); } catch (err) { result = undefined; }
+          if (!entered(result)) {
+            delete delivered[id];
+            break; // not taken: it stays with the console, and the ones after it wait so the order is kept
+          }
+        }
+        const acked = await call($, 'POST', '/v1/ack', { id });
+        if (acked.ok || acked.status === 404) delete delivered[id]; // 404: the console no longer holds it, nothing to confirm
+        else break; // not confirmed: offered again next poll and acknowledged then, without a second submit
       }
     } catch (err) {
       /* the next tick tries again */

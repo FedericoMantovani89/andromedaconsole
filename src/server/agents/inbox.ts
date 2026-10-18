@@ -5,8 +5,8 @@ import { readJsonState, setAside, type StateReport } from '../json-file';
 export interface InboxMessage { id: string; text: string }
 
 /**
- * Messages from the console to a session (goals, answers). The mod polls, acknowledges, then injects the text as a new
- * turn; a message that was not acknowledged is delivered again (SPEC 10.5 "conferma di ricezione").
+ * Messages from the console to a session (goals, answers). The mod polls, injects the text as a new turn, and acknowledges it
+ * once the engine took the prompt; a message that was not acknowledged is offered again (SPEC 10.5 "conferma di ricezione").
  *
  * With a file the boxes are written through on every change (Phase 6A), so what was not delivered survives a restart; `load()`
  * reads them back. An acknowledged message is gone for good: its id is never delivered again.

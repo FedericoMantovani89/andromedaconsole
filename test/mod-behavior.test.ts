@@ -19,6 +19,8 @@ async function loadMod() {
 interface FakeOptions {
   env?: Record<string, string | undefined>;
   fetch?: (url: string, init: { method?: string; body?: string }) => { ok: boolean; status?: number; text?: string } | Error;
+  /** What `$.prompt.submit` does; by default the prompt enters and the engine answers `{ text }`. */
+  submit?: (text: string) => Promise<unknown>;
 }
 function fake$(o: FakeOptions = {}) {
   const env = { CONSOLE_URL: 'http://127.0.0.1:1', CONSOLE_TOKEN: 'T', CONSOLE_ROLE: 'main', CONSOLE_AGENT: 'shop-api', ...o.env };
@@ -39,7 +41,7 @@ function fake$(o: FakeOptions = {}) {
     },
     tool: { register: async (spec: { name: string }) => { registeredTools.push(spec.name); } },
     clock: { every: (_ms: number, fn: () => Promise<void> | void) => { ticks.push(fn); }, sleep: async () => {} },
-    prompt: { submit: async ({ text }: { text: string }) => { submitted.push(text); } },
+    prompt: { submit: async ({ text }: { text: string }) => { submitted.push(text); calls.push('submit'); return o.submit ? o.submit(text) : { text }; } },
   };
   return { $, calls, ticks, registeredTools, submitted };
 }
@@ -68,20 +70,83 @@ it('an agent gets list_agents and the ticket tools, never spawn_agent', async ()
   await find('session.start')(f.$, {}, next);
   expect(f.registeredTools).toEqual(['list_agents', 'send_message', 'checklist_set', 'step_done', 'report_blocked']);
 });
-it('delivers an inbox message only after the console confirmed receiving it', async () => {
+// ---- inbox delivery (SPEC 10.5 "conferma di ricezione"): acknowledged only once the prompt entered the session ----
+/** A console whose inbox keeps offering every message until it is acknowledged, like src/server/agents/inbox.ts. */
+function inboxConsole(messages: { id: string; text: string }[], ackOk: () => boolean = () => true) {
+  const box = [...messages];
+  const acks: string[] = [];
+  const fetch = (url: string, init: { method?: string; body?: string }) => {
+    if (url.endsWith('/v1/inbox')) return { ok: true, text: JSON.stringify({ messages: box }) };
+    if (url.endsWith('/v1/ack')) {
+      const id = JSON.parse(init.body ?? '{}').id as string;
+      acks.push(id);
+      if (!ackOk()) return { ok: false, status: 500 };
+      const i = box.findIndex((m) => m.id === id);
+      if (i >= 0) box.splice(i, 1);
+      return { ok: true, status: 204, text: '' };
+    }
+    return { ok: true, text: '{}' };
+  };
+  return { fetch, acks, box };
+}
+
+it('delivers an inbox message as a prompt and acknowledges it after the prompt entered', async () => {
   const { find } = await loadMod();
-  const f = fake$({ fetch: (url) => url.endsWith('/v1/inbox') ? { ok: true, text: JSON.stringify({ messages: [{ id: 'm1', text: 'hello goal' }] }) } : { ok: true, text: '{}' } });
+  const c = inboxConsole([{ id: 'm1', text: 'hello goal' }]);
+  const f = fake$({ fetch: c.fetch });
   await find('session.start')(f.$, {}, next);
   await f.ticks[0]!();
-  expect(f.calls.indexOf('POST /v1/ack')).toBeGreaterThan(f.calls.indexOf('GET /v1/inbox'));
   expect(f.submitted).toEqual(['hello goal']);
+  expect(f.calls.indexOf('POST /v1/ack')).toBeGreaterThan(f.calls.indexOf('submit'));
+  expect(c.box).toEqual([]);
 });
-it('does not inject a message when the acknowledgement failed (it would be delivered twice)', async () => {
+it.each([
+  ['throws', async () => { throw new Error('engine busy'); }],
+  ['is dropped', async () => ({ drop: 'a Stop hook stands' })],
+  ['resolves with nothing', async () => undefined],
+])('a prompt that %s is not acknowledged: the next poll offers it again and it is submitted again', async (_label, failing) => {
   const { find } = await loadMod();
-  const f = fake$({ fetch: (url) => url.endsWith('/v1/inbox') ? { ok: true, text: JSON.stringify({ messages: [{ id: 'm1', text: 'goal' }] }) } : url.endsWith('/v1/ack') ? { ok: false, status: 500 } : { ok: true } });
+  const c = inboxConsole([{ id: 'm1', text: 'the question' }, { id: 'm2', text: 'later' }]);
+  let attempts = 0;
+  const f = fake$({ fetch: c.fetch, submit: async (text) => { attempts += 1; return attempts === 1 ? failing() : { text }; } });
   await find('session.start')(f.$, {}, next);
   await f.ticks[0]!();
-  expect(f.submitted).toEqual([]);
+  expect(c.acks).toEqual([]); // the console still holds both, and the order is kept: m2 waits behind m1
+  expect(f.submitted).toEqual(['the question']);
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['the question', 'the question', 'later']);
+  expect(c.acks).toEqual(['m1', 'm2']);
+  expect(c.box).toEqual([]);
+});
+it('a message whose acknowledgement failed after it entered is acknowledged on the next poll but not submitted twice', async () => {
+  const { find } = await loadMod();
+  let ackCalls = 0;
+  const c = inboxConsole([{ id: 'm1', text: 'goal' }], () => { ackCalls += 1; return ackCalls > 1; });
+  const f = fake$({ fetch: c.fetch });
+  await find('session.start')(f.$, {}, next);
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['goal']);
+  expect(c.box).toHaveLength(1); // the console did not hear the ack: it offers m1 again
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['goal']);
+  expect(c.acks).toEqual(['m1', 'm1']);
+  expect(c.box).toEqual([]);
+  await f.ticks[0]!();
+  expect(f.submitted).toEqual(['goal']);
+});
+it('the acknowledgement is sent only after the submit resolved', async () => {
+  const { find } = await loadMod();
+  const c = inboxConsole([{ id: 'm1', text: 'goal' }]);
+  let enter: (v: unknown) => void = () => {};
+  const f = fake$({ fetch: c.fetch, submit: () => new Promise((r) => { enter = r; }) });
+  await find('session.start')(f.$, {}, next);
+  const tick = f.ticks[0]!();
+  await vi.waitFor(() => expect(f.submitted).toEqual(['goal']));
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(c.acks).toEqual([]);
+  enter({ text: 'goal' });
+  await tick;
+  expect(c.acks).toEqual(['m1']);
 });
 it('a console that cannot be reached never breaks a hook: it still passes the event on', async () => {
   const { find } = await loadMod();

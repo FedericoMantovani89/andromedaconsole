@@ -54,6 +54,11 @@ export interface StepDeps extends TicketTestDeps {
 const MIN_STUDY_NOTE = 10;
 const MIN_DOCS_NOTE = 10;
 const MIN_SKIP_NOTE = 20;
+/**
+ * A request reaches its recipient as a prompt that enters only once the session is idle, so a refusal in a long turn can name an id whose
+ * text the agent has not seen yet (seen in a real run: it answered "unknown" and the request went to the main).
+ */
+const UNSEEN_TEXT = ' If you have not seen the text of a request, it is waiting to be delivered: end your turn and it arrives as the next message; do not answer unknown for that reason.';
 const refuse = (code: StepRefusal, extra: Omit<Extract<StepResult, { status: 'refused' }>, 'status' | 'code'> = {}): StepResult => ({ status: 'refused', code, ...extra });
 
 /**
@@ -191,10 +196,10 @@ export class StepService {
       if (waiting.length > 0) {
         return refuse('pending_requests', { detail: `these steps still wait for an answer: ${waiting.map((s) => `${s.n} (${s.waitingOn!.requestId})`).join(', ')}. Go on with the other steps; the console messages you when an answer arrives. If only waiting steps are left, end your turn.` });
       }
-      if (owed.length > 0) return refuse('unanswered_requests', { detail: `answer these requests first with send_message: ${owed.join(', ')}` });
+      if (owed.length > 0) return refuse('unanswered_requests', { detail: `answer these requests first with send_message: ${owed.join(', ')}.${UNSEEN_TEXT}` });
     }
     const owedHere = owed.filter((id) => next.title.includes(id));
-    if (owedHere.length > 0) return refuse('request_unanswered', { detail: `${owedHere.join(', ')} is still open: reply with send_message (type answer or unknown) before closing this step` });
+    if (owedHere.length > 0) return refuse('request_unanswered', { detail: `${owedHere.join(', ')} is still open: reply with send_message (type answer or unknown) before closing this step.${UNSEEN_TEXT}` });
     const markerIds = isDocs ? (this.d.requestIds?.(slug) ?? []) : (next.resolved ?? []);
     if (markerIds.length > 0) {
       const hits = await findMarkers(wt.worktree, markerIds);

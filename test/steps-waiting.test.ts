@@ -106,7 +106,10 @@ it('a request still owed blocks the validation, and the step named after it bloc
   const items = ['Study the code', 'Tests first: ordering', 'Answer TODO-aaaaaa', 'Implement a', 'Validation: run the suite', 'Update documentation'];
   await upTo(2, items);
   debts = ['TODO-aaaaaa'];
-  expect(code(await done(3))).toBe('request_unanswered');
+  const here = await done(3);
+  expect(code(here)).toBe('request_unanswered');
+  // A request's text waits for the end of the turn (a plugin prompt enters once the session is idle): the id can be seen first.
+  expect(here.status === 'refused' && here.detail).toMatch(/text .*end your turn/i);
   debts = [];
   expect(code(await done(3))).toBe('closed');
   await done(4);
@@ -114,6 +117,7 @@ it('a request still owed blocks the validation, and the step named after it bloc
   const r = await done(5);
   expect(code(r)).toBe('unanswered_requests');
   expect(r.status === 'refused' && r.detail).toContain('TODO-cccccc');
+  expect(r.status === 'refused' && r.detail).toMatch(/text .*end your turn/i);
   expect(existsSync(join(wt, 'validated.txt'))).toBe(false);
 });
 it('the ticket is not delivered while any comment of any of its requests is left, and is when they are gone', async () => {
