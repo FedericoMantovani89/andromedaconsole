@@ -89,7 +89,8 @@ const TOOL_SPECS = {
   },
   list_agents: {
     description: 'List the sessions of this project: name, profile, state and goal, and the ticket status when it is not simply in progress '
-      + '(for example suspended_limit or delivered). Use it to know who exists before asking.',
+      + '(for example suspended_limit or delivered). Use it to know who exists before asking. '
+      + 'For the main it also lists the open requests only it can settle (escalated requests) and, as release, the release request the user has not answered yet.',
     inputSchema: { type: 'object', properties: {} },
   },
   send_message: {

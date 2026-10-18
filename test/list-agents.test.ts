@@ -1,7 +1,12 @@
-import { it, expect } from 'vitest';
-import { autoClose, bootServer, mod, modEvent, ui, until, state } from './helpers';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterEach, it, expect } from 'vitest';
+import { autoClose, bootServer, mod, modEvent, ui, until, state, type Running } from './helpers';
+import { makeRepo, removeDir, worktreePathFor, type TestRepo } from './git-helpers';
 
 autoClose();
+const repos: TestRepo[] = [];
+afterEach(() => { while (repos.length) removeDir(repos.pop()!.base); });
 
 const spawn = (s: Awaited<ReturnType<typeof bootServer>>, name: string, goal: string) =>
   mod(s, 'shop-api', '/v1/tools/spawn_agent', 'POST', { name, profile: 'developer', goal });
@@ -45,3 +50,43 @@ it('needs a session token', async () => {
   const s = await bootServer();
   expect((await ui(s, '/v1/tools/list_agents', 'POST', {})).status).toBe(401);
 });
+
+const ITEMS = ['Study the code', 'Tests first: ordering', 'Implement a', 'Implement b', 'Validation: run the suite', 'Update documentation'];
+const tool = (s: Running, slug: string, name: string, body: unknown = {}) => mod(s, slug, `/v1/tools/${name}`, 'POST', body);
+const listBody = async (s: Running, as: string) => (await tool(s, as, 'list_agents')).body;
+async function boot(): Promise<{ s: Running; t: TestRepo }> {
+  const t = makeRepo({ remote: true });
+  repos.push(t);
+  const s = await bootServer({ projectRoot: t.repo, config: { git: { worktrees: true } } });
+  s.setLimits({ global: 20, perProject: 20 });
+  const file = join(t.repo, '.andromedaconsole', 'project.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), testCommand: 'node -e "process.exit(0)"' }));
+  return { s, t };
+}
+async function mergedTicket(s: Running, t: TestRepo, slug: string): Promise<void> {
+  await tool(s, 'shop-api', 'spawn_agent', { name: slug, profile: 'developer', goal: `Work of ${slug}` });
+  await tool(s, slug, 'checklist_set', { items: ITEMS });
+  const wt = worktreePathFor(t.repo, slug);
+  writeFileSync(join(wt, `${slug}.js`), `${slug}
+`);
+  for (let n = 1; n <= 6; n++) {
+    if (n === 6) writeFileSync(join(wt, 'README.md'), `docs by ${slug}
+`);
+    await tool(s, slug, 'step_done', { n, note: 'a decent note for this step' });
+  }
+  await tool(s, 'shop-api', 'request_review', { name: slug });
+  await tool(s, `review-${slug}`, 'review_verdict', { pass: true, notes: [] });
+  expect((await tool(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
+}
+
+it('the main sees the open release request; an agent does not; it goes away once answered', async () => {
+  const { s, t } = await boot();
+  await mergedTicket(s, t, 'fix-login');
+  expect((await listBody(s, 'shop-api')).release).toBeUndefined();
+  const asked = (await tool(s, 'shop-api', 'propose_release')).body;
+  expect(asked.status).toBe('asked');
+  expect((await listBody(s, 'shop-api')).release).toEqual({ id: asked.id, status: 'pending' });
+  expect((await listBody(s, 'fix-login')).release).toBeUndefined();
+  expect((await ui(s, `/api/queue/${asked.id}/answer`, 'POST', { answer: 'reject' })).status).toBe(200);
+  expect((await listBody(s, 'shop-api')).release).toBeUndefined();
+}, 120_000);

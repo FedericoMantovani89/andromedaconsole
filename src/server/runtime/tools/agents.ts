@@ -10,6 +10,7 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
   const projectName = k.get('projectName');
   const registry = k.get('registry');
   const requests = k.get('requests');
+  const release = k.get('release');
   const scheduler = k.get('scheduler');
   const ticketStatusOf = k.get('ticketStatusOf');
   const resumer = k.get('resumer');
@@ -21,6 +22,8 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
     list_agents: async (caller) => {
       // The main also sees what only it can settle (escalated requests, questions to it): a restart or a lost message forgets nothing.
       const held = caller === projectName ? requests.forMain() : [];
+      // An open release request waits for the user in the queue: the main sees it, so it does not ask again or forget it.
+      const pendingRelease = caller === projectName ? release.pendingRequest() : undefined;
       return {
         agents: registry.list().map((a) => ({
           slug: a.slug, profile: a.profile, role: a.role, state: a.state,
@@ -30,6 +33,7 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
           ...(() => { const t = a.role === 'agent' ? ticketStatusOf(a.slug) : undefined; return t && t !== 'in_progress' ? { ticket: t } : {}; })(),
         })),
         ...(held.length > 0 ? { requests: held } : {}),
+        ...(pendingRelease ? { release: { id: pendingRelease.id, status: 'pending' as const } } : {}),
       };
     },
     resume_agent: async (_slug, body) => {

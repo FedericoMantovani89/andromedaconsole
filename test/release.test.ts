@@ -119,6 +119,16 @@ describe('proposeRelease', () => {
     asked[0]!.answer('reject');
     expect(svc.pendingRequest()).toBeUndefined();
   });
+  it('reject then propose again opens a new entry', async () => {
+    svc = buildService({ isOpen: () => true });
+    await mergedTicket('a-job', 'a.txt');
+    const first = await svc.proposeRelease();
+    asked[0]!.answer('reject');
+    const second = await svc.proposeRelease();
+    expect(second).toMatchObject({ status: 'asked' });
+    expect((second as { id: string }).id).not.toBe((first as { id: string }).id);
+    expect(asked).toHaveLength(2);
+  });
   it('does not bother the user when the tests of the project branch are red', async () => {
     await mergedTicket('a-job', 'BAD');
     const r = await svc.proposeRelease();
