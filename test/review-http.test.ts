@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { autoClose, bootServer, mod, modEvent, ui, until, type Running } from './helpers';
+import { autoClose, bootServer, mod, modEvent, modToolUntilEnd, ui, until, type Running } from './helpers';
 import { gitSync, makeRepo, type TestRepo, removeDir, worktreePathFor } from './git-helpers';
 
 vi.setConfig({ testTimeout: 90_000 });
@@ -178,7 +178,7 @@ it('the whole pipeline: delivered, reviewed, approved, merged into the project b
   await until(() => !existsSync(worktreePathFor(t.repo, 'review-fix-login')), 20_000);
   expect((await tool(s, 'shop-api', 'merge_ticket', {})).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   const before = Number(gitSync(t.repo, 'rev-list', '--count', 'project/shop-api'));
-  const r = await tool(s, 'shop-api', 'merge_ticket', { name: 'fix-login' });
+  const r = await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: 'fix-login' });
   expect(r.body).toMatchObject({ status: 'merged' });
   expect(Number(gitSync(t.repo, 'rev-list', '--count', 'project/shop-api'))).toBe(before + 1);
   expect(gitSync(t.repo, 'show', 'project/shop-api:math.js')).toBe('module.exports = {};');
@@ -235,7 +235,7 @@ it('every review, merge and release tool call pushes the new state to the UI (a 
   await until(() => lastTicket() === 'in_review', 40_000);
   await tool(s, 'review-fix-login', 'review_verdict', { pass: true });
   await until(() => lastTicket() === 'approved', 40_000);
-  await tool(s, 'shop-api', 'merge_ticket', { name: 'fix-login' });
+  await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: 'fix-login' });
   await until(() => lastTicket() === 'merged', 60_000);
   ws.close();
 });

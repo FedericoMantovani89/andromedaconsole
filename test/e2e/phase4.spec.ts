@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { makeRepo, gitSync, type TestRepo } from '../git-helpers';
+import { untilEnd } from '../until-end';
 
 process.env.CONSOLE_TEST = '1';
 const { startServer } = await import('../../src/server/index');
@@ -159,13 +160,13 @@ try {
       await tool(`review-${slug}`, 'review_verdict', { pass: true, notes: [] });
     }
     const before = Number(gitSync(t.repo, 'rev-list', '--count', 'project/shop-api'));
-    const m1 = await tool('shop-api', 'merge_ticket', { name: 'first-job' });
+    const m1 = await untilEnd(() => tool('shop-api', 'merge_ticket', { name: 'first-job' }), (r) => r.json?.status);
     check('the first ticket is squashed into the project branch as one commit', m1.json.status === 'merged' && Number(gitSync(t.repo, 'rev-list', '--count', 'project/shop-api')) === before + 1, JSON.stringify(m1.json));
     check('its message follows the console\'s format', gitSync(t.repo, 'log', '-1', '--format=%B', 'project/shop-api').startsWith('ticket first-job: First change') && gitSync(t.repo, 'log', '-1', '--format=%B', 'project/shop-api').includes('Reviewed-by: review-first-job (round 1)'));
     check('its session ended and its folder and local branch are gone', await until(async () => !existsSync(worktreeOf(t, 'first-job')) && gitSync(t.repo, 'branch', '--list', 'agent/shop-api/first-job') === ''));
     check('the first panel shows Finished and the ticket Merged', await until(async () => (await stateChip(page, 'first-job').innerText().catch(() => '')) === 'Finished' && (await chip(page, 'first-job').innerText().catch(() => '')) === 'Merged'));
     const tip = gitSync(t.repo, 'rev-parse', 'project/shop-api');
-    const m2 = await tool('shop-api', 'merge_ticket', { name: 'second-job' });
+    const m2 = await untilEnd(() => tool('shop-api', 'merge_ticket', { name: 'second-job' }), (r) => r.json?.status);
     check('the conflicting ticket is not merged by force', m2.json.status === 'conflict' && m2.json.files.includes('shared.js') && gitSync(t.repo, 'rev-parse', 'project/shop-api') === tip, JSON.stringify(m2.json));
     check('the author got the files in a message from the main', (await inbox('second-job')).some((m) => m.startsWith('Message from the main') && m.includes('shared.js')));
     check('its folder is in the conflict state with markers it can edit', readFileSync(join(worktreeOf(t, 'second-job'), 'shared.js'), 'utf8').includes('<<<<<<<'));
@@ -183,7 +184,7 @@ try {
     await deliver('fix-login', { 'login.js': 'login\n' }, 'Fix the login');
     await tool('shop-api', 'request_review', { name: 'fix-login' });
     await tool('review-fix-login', 'review_verdict', { pass: true, notes: [] });
-    await tool('shop-api', 'merge_ticket', { name: 'fix-login' });
+    await untilEnd(() => tool('shop-api', 'merge_ticket', { name: 'fix-login' }), (r) => r.json?.status);
     const remoteBefore = gitSync(t.remote, 'rev-parse', 'main');
 
     check('the main cannot push main (guard): plain, forced, refspec, and by name from a tag', await (async () => {

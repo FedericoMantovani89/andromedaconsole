@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { autoClose, usePipePty, bootServer, mod, req, ui, until, type Running } from './helpers';
+import { autoClose, usePipePty, bootServer, mod, modToolUntilEnd, req, ui, until, type Running } from './helpers';
 import { gitSync, makeRepo, type TestRepo, removeDir, worktreePathFor } from './git-helpers';
 import { AGENT_TOOLS, MAIN_TOOLS, RECOVERY_TOOLS, REVIEWER_TOOLS } from '../src/server/agents/spawn';
 import { releaseQuestion, RELEASE_QUESTION_RE } from '../src/server/tickets/release';
@@ -43,7 +43,7 @@ async function mergedTicket(s: Running, t: TestRepo, slug: string, file: string)
   }
   expect((await tool(s, 'shop-api', 'request_review', { name: slug })).body.status).toBe('ok');
   expect((await tool(s, `review-${slug}`, 'review_verdict', { pass: true, notes: [] })).body.outcome).toBe('approved');
-  expect((await tool(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
+  expect((await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
 }
 
 /** The question the main was told to show, read back from its inbox message. */

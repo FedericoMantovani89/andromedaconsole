@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, it, expect } from 'vitest';
-import { autoClose, bootServer, mod, modEvent, ui, until, state, type Running } from './helpers';
+import { autoClose, bootServer, mod, modEvent, modToolUntilEnd, ui, until, state, type Running } from './helpers';
 import { makeRepo, removeDir, worktreePathFor, type TestRepo } from './git-helpers';
 
 autoClose();
@@ -76,7 +76,7 @@ async function mergedTicket(s: Running, t: TestRepo, slug: string): Promise<void
   }
   await tool(s, 'shop-api', 'request_review', { name: slug });
   await tool(s, `review-${slug}`, 'review_verdict', { pass: true, notes: [] });
-  expect((await tool(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
+  expect((await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
 }
 
 it('the main sees the open release request; an agent does not; it goes away once answered', async () => {

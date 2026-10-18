@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { afterEach } from 'vitest';
 import { startServer } from '../src/server/index';
 import { pipePty } from './pipe-pty';
+import { untilEnd } from './until-end';
 import type { Runner } from '../src/server/prereq/checks';
 import type { SleepClock } from '../src/server/budget/sleep';
 import type { Notifier } from '../src/server/notify/notifier';
@@ -102,6 +103,9 @@ export function req(s: Running, path: string, o: { method?: string; token?: stri
 export const ui = (s: Running, path: string, method = 'GET', body?: unknown): Promise<Res> => req(s, path, { method, token: s.token, body });
 export const mod = (s: Running, slug: string, path: string, method = 'GET', body?: unknown): Promise<Res> =>
   req(s, path, { method, token: s.sessionTokenFor(slug), body });
+/** A console tool called as the mod calls it: asked again while it answers "running" (merge_ticket, step_done). */
+export const modToolUntilEnd = (s: Running, slug: string, name: string, body: unknown = {}): Promise<Res> =>
+  untilEnd(() => mod(s, slug, `/v1/tools/${name}`, 'POST', body), (r) => r.body?.status);
 export const state = async (s: Running) => (await ui(s, '/api/state')).body;
 
 export async function until(f: () => Promise<boolean> | boolean, ms = 8000, what?: () => string): Promise<void> {

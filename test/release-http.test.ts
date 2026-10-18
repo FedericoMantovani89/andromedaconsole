@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { autoClose, usePipePty, bootServer, mod, ui, until, type Running } from './helpers';
+import { autoClose, usePipePty, bootServer, mod, modToolUntilEnd, ui, until, type Running } from './helpers';
 import { gitSync, makeRepo, type TestRepo, removeDir, worktreePathFor } from './git-helpers';
 import { git } from '../src/server/git/git';
 
@@ -40,7 +40,7 @@ async function mergedTicket(s: Running, t: TestRepo, slug: string, file: string)
   }
   expect((await tool(s, 'shop-api', 'request_review', { name: slug })).body.status).toBe('ok');
   expect((await tool(s, `review-${slug}`, 'review_verdict', { pass: true, notes: [] })).body.outcome).toBe('approved');
-  expect((await tool(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
+  expect((await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
 }
 
 it('the main repository gets the pre-push hook at startup, and a plain push of main from the checkout is refused', async () => {
