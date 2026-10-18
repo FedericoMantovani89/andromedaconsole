@@ -125,6 +125,31 @@ describe('TicketStore suspension', () => {
   });
 });
 
+describe('TicketStore agent tests', () => {
+  const claim = { command: 'npx vitest run test/a.test.ts', result: 'passed' as const };
+  const write = (t: Record<string, unknown>): void => {
+    mkdirSync(dir(), { recursive: true });
+    writeFileSync(join(dir(), 'a.json'), JSON.stringify({ slug: 'a', steps: [{ n: 1, title: 'one', done: true }], blocked: false, updatedAt: '', round: 0, recoveries: 0, verdicts: [], ...t }));
+  };
+  it('a reopened ticket forgets the claim of the round before', () => {
+    write({ status: 'changes_requested', agentTests: claim });
+    expect(new TicketStore(root).reopen('a').agentTests).toBeUndefined();
+    expect(new TicketStore(root).get('a')!.agentTests).toBeUndefined();
+  });
+  it('a restarted ticket forgets the claim of the agent that stopped', () => {
+    write({ status: 'blocked', agentTests: claim });
+    expect(new TicketStore(root).restart('a').agentTests).toBeUndefined();
+  });
+  it('a damaged claim on disk reads as no claim; a sound one is kept', () => {
+    write({ status: 'delivered', agentTests: { command: 42, result: 'maybe' } });
+    expect(new TicketStore(root).get('a')!.agentTests).toBeUndefined();
+    write({ status: 'delivered', agentTests: 'passed' });
+    expect(new TicketStore(root).get('a')!.agentTests).toBeUndefined();
+    write({ status: 'delivered', agentTests: claim });
+    expect(new TicketStore(root).get('a')!.agentTests).toEqual(claim);
+  });
+});
+
 describe('TicketStore.rename', () => {
   it('moves the whole record to the new name: steps, recoveries, handover, budget, goal and status', () => {
     const s = new TicketStore(root);

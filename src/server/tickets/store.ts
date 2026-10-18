@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { removeStaleTmp, writeJsonAtomic } from '../fs-atomic';
 import { readJsonState, setAside, type StateReport } from '../json-file';
 import type { Step } from './checklist';
+import { parseAgentTests } from './agent-tests';
 import { canMove, type TicketStatus } from './flow';
 import { SLUG_RE } from '../../shared/slug';
 
@@ -76,8 +77,13 @@ export class TicketStore {
   }
 
   private normalize(t: Ticket): Ticket {
-    // Phase 3 files have no pipeline fields.
-    return { ...t, round: typeof t.round === 'number' ? t.round : 0, recoveries: typeof t.recoveries === 'number' ? t.recoveries : 0, verdicts: Array.isArray(t.verdicts) ? t.verdicts : [] };
+    // Phase 3 files have no pipeline fields. A damaged agent claim reads as none: the report must not fail on it.
+    const { agentTests: claim, ...rest } = t;
+    const parsed = claim === undefined ? undefined : parseAgentTests(claim);
+    return {
+      ...rest, round: typeof t.round === 'number' ? t.round : 0, recoveries: typeof t.recoveries === 'number' ? t.recoveries : 0, verdicts: Array.isArray(t.verdicts) ? t.verdicts : [],
+      ...(parsed?.ok ? { agentTests: parsed.tests } : {}),
+    };
   }
 
   /** Every ticket on disk (damaged files and files that are not tickets are skipped). */
@@ -201,7 +207,8 @@ export class TicketStore {
     const first = t.steps.length + 1;
     const added: Step[] = [`${o.firstStep ?? 'Review fixes'} (round ${round})`, `Validation (round ${round})`, `Update documentation (round ${round})`]
       .map((title, i) => ({ n: first + i, title, done: false }));
-    const { blockedReason: _gone, ...rest } = t;
+    // The agent's claim about its tests belongs to the round it was made in: the next report must not show it as current.
+    const { blockedReason: _gone, agentTests: _claim, ...rest } = t;
     return this.save({ ...rest, blocked: false, status: 'in_progress', round, steps: [...t.steps, ...added] });
   }
 
@@ -214,7 +221,7 @@ export class TicketStore {
   restart(slug: string): Ticket {
     const t = this.existing(slug);
     if (!['suspended_budget', 'blocked', 'recovering', 'suspended_limit'].includes(t.status) || !canMove(t.status, 'in_progress')) throw new Error('ticket.badTransition');
-    const { stopCause: _gone, blockedReason: _stale, ...rest } = t;
+    const { stopCause: _gone, blockedReason: _stale, agentTests: _claim, ...rest } = t; // the stopped agent's claim is not the new one's
     return this.save({ ...rest, status: 'in_progress', blocked: false });
   }
 
