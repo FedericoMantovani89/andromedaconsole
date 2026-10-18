@@ -13,6 +13,10 @@ change that introduces the behaviour.
 - Fixed: a release request that is no longer in the queue is asked again instead of answering "already asked".
 - Added: a release can be approved or rejected from the Claude app: the main shows the request in its own AskUserQuestion dialog and the mod posts the user's choice with a per-session release key the model never sees.
 - Added: guard rule `path.console-config`: no session (main or agent) may write a project's `.claude/settings.local.json` (judged as Windows resolves the path: cd, junctions, 8.3 names) or the console mod's folder; `settings.json` and the `.claude` folder stay free.
+- Changed: the main's `AskUserQuestion` carrying `answers` or `annotations` in its input is refused, and a release dialog counts only with exactly the options Reject then Approve.
+- Added: the main is told when an answer in its release dialog did not count (question reworded, or the request already settled), gets the question back when it proposes a release that is still waiting, and, when its mod has no release key, is told to send the user to the console queue.
+- Fixed: `sed -i` / `--in-place` and `perl -i` count as writes to the files they edit for the guard (the mod folder, and `path.outside-worktree` for agents).
+- Tests: a static check fails if any source file writes to the user's Claude home (`~/.claude`, `CLAUDE_CONFIG_DIR`, `~/.claude.json`).
 
 ## [0.0.10] - 2026-10-15
 

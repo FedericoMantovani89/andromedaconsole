@@ -50,6 +50,17 @@ describe.each(['main', 'agent'] as const)('%s', (role) => {
     expect(rule(role, 'Write', { file_path: join(MOD, 'hooks', 'register.js') })).toBe('path.console-config');
     expect(rule(role, 'Edit', { file_path: join(MOD, 'hooks', 'hooks.json') })).toBe('path.console-config');
   });
+  it('refuses shell writes into the mod folder: tee, sed -i, perl -pi, cp, a redirection', () => {
+    const f = join(MOD, 'hooks', 'register.js');
+    for (const command of [`echo x | tee "${f}"`, `sed -i 's/a/b/' "${f}"`, `sed -i.bak -e 's/a/b/' "${f}"`, `sed --in-place 's/a/b/' "${f}"`,
+      `perl -pi -e 's/a/b/' "${f}"`, `perl -i.bak -pe 's/a/b/' "${f}"`, `cp other.js "${f}"`, `echo x > "${f}"`]) {
+      expect(rule(role, 'Bash', { command }), command).toBe('path.console-config');
+    }
+    // reading the mod, and editing an ordinary file in place, stay allowed
+    for (const command of [`sed 's/a/b/' "${f}"`, `sed -n '1p' "${f}"`, "sed -i 's/a/b/' notes.txt", "perl -pi -e 's/a/b/' notes.txt", `perl -Ilib script.pl "${f}"`]) {
+      expect(rule(role, 'Bash', { command }), command).toBe('allow');
+    }
+  });
   it('refuses shell writes to it', () => {
     expect(rule(role, 'Bash', { command: 'echo {} > .claude/settings.local.json' })).toBe('path.console-config');
     expect(rule(role, 'PowerShell', { command: 'Set-Content .claude\\settings.local.json x' })).toBe('path.console-config');
@@ -88,6 +99,13 @@ describe.each(['main', 'agent'] as const)('%s', (role) => {
     expect(rule(role, 'Bash', { command: 'cat .claude/settings.local.json' })).toBe('allow');
     expect(rule(role, 'Bash', { command: 'echo x > notes.txt' })).toBe('allow');
   });
+});
+
+it('an agent editing a file outside its worktree in place (sed -i, perl -pi) is refused like any other write', () => {
+  const outside = join(homedir(), 'notes-outside.txt');
+  expect(rule('agent', 'Bash', { command: `sed -i 's/a/b/' "${outside}"` })).toBe('path.outside-worktree');
+  expect(rule('agent', 'Bash', { command: `perl -pi -e 's/a/b/' "${outside}"` })).toBe('path.outside-worktree');
+  expect(rule('agent', 'Bash', { command: `sed 's/a/b/' "${outside}"` })).toBe('allow');
 });
 
 it('after a cd the guard cannot follow, the main may not write a relative settings.local.json; other targets are judged as before', () => {

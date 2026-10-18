@@ -67,9 +67,9 @@ async function loadMod() {
 }
 const Q = '[release r-1] Release project "p" to origin/main: 1 ticket (a), 1 file changed, tests passed (npm test). Approve?';
 /** An answered AskUserQuestion as the real engine records it (Task 4 spike: result = { questions, answers, annotations }). */
-const answered = (question: string, label: string, id = 'toolu_1') => ({
+const answered = (question: string, label: string, id = 'toolu_1', labels = ['Reject', 'Approve']) => ({
   role: 'assistant', text: '', toolUses: [{
-    tool_use_id: id, tool: 'AskUserQuestion', input: { questions: [{ question, header: 'Release', multiSelect: false, options: [{ label: 'Approve' }, { label: 'Reject' }] }] },
+    tool_use_id: id, tool: 'AskUserQuestion', input: { questions: [{ question, header: 'Release', multiSelect: false, options: labels.map((l) => ({ label: l })) }] },
     result: { questions: [{ question }], answers: { [question]: label }, annotations: {} },
     text: `Your questions have been answered: "${question}"="${label}". You can now continue with these answers in mind.`,
   }],
@@ -190,6 +190,25 @@ it('after unknown_request a corrected dialog for the same request is still poste
   expect(f.answers()).toHaveLength(2);
 });
 
+it('only a dialog that showed exactly Reject then Approve counts, and a record without its call id is never posted', async () => {
+  const find = await loadMod();
+  const f = fake$({ messages: [
+    answered(Q, 'Approve', 'toolu_o', ['Approve', 'Reject']),
+    answered(Q, 'Approve', 'toolu_x', ['Reject', 'Approve', 'Later']),
+    answered(Q, 'Approve', 'toolu_n', ['Approve']),
+    answered(Q, 'Approve', ''),
+  ] });
+  const noId = answered(Q, 'Approve', 'toolu_gone');
+  delete (noId.toolUses[0] as { tool_use_id?: string }).tool_use_id;
+  f.state.messages.push(noId);
+  await find('session.start')(f.$, {}, pass);
+  await find('turn.complete')(f.$, {}, pass);
+  expect(f.answers()).toEqual([]);
+  f.state.messages = [answered(Q, 'Approve', 'toolu_ok')];
+  await find('turn.complete')(f.$, {}, pass);
+  expect(f.answers().map((a) => a.id)).toEqual(['r-1']);
+});
+
 it('the mod and the console read the release question with the same pattern', () => {
   const src = readFileSync(join(__dirname, '..', 'mod', 'hooks', 'register.js'), 'utf8');
   const inMod = /const RELEASE_QUESTION = \/(.+)\/;/.exec(src)![1]!;
@@ -215,13 +234,61 @@ it('the question names the request first and says what is released', () => {
     .toContain('Release project "p" in 2 repositories (abc-be, abc-fe) to origin/main:');
 });
 
-it('the notice lists Reject before Approve, so a stray Enter on the dialog rejects', async () => {
+it('the notice lists Reject before Approve, so a stray Enter on the dialog rejects; it says a console answer does not close the dialog', async () => {
   const { s, t } = await boot();
+  await releaseKey(s, 'shop-api');
   await mergedTicket(s, t, 'fix-login', 'login.js');
   await tool(s, 'shop-api', 'propose_release');
   const notice = (await inbox(s, 'shop-api')).find((m) => m.startsWith('Release request '))!;
   expect(notice.indexOf('"Reject"')).toBeGreaterThan(0);
   expect(notice.indexOf('"Reject"')).toBeLessThan(notice.indexOf('"Approve"'));
+  expect(notice).toContain('An answer there does not close your dialog');
+  expect(notice).not.toContain('closes both');
+});
+
+it('proposing again while the request waits gives the main the same question back (already_asked)', async () => {
+  const { s, t } = await boot();
+  await releaseKey(s, 'shop-api');
+  await mergedTicket(s, t, 'fix-login', 'login.js');
+  const first = (await tool(s, 'shop-api', 'propose_release')).body;
+  const { question } = askedQuestion(await inbox(s, 'shop-api'));
+  for (const m of (await mod(s, 'shop-api', '/v1/inbox')).body.messages) await mod(s, 'shop-api', '/v1/ack', 'POST', { id: m.id }); // the main read them
+  expect((await tool(s, 'shop-api', 'propose_release')).body).toEqual({ status: 'already_asked', id: first.id });
+  const again = await inbox(s, 'shop-api');
+  expect(again.filter((m) => m.startsWith('Release request '))).toHaveLength(1);
+  expect(askedQuestion(again)).toEqual({ id: first.id, question });
+});
+
+it('a main without a release key is told to send the user to the console queue, not to show a dialog', async () => {
+  const { s, t } = await boot();
+  await mergedTicket(s, t, 'fix-login', 'login.js'); // the main's token was used before any key was asked: it has none
+  expect((await releaseKey(s, 'shop-api')).status).toBe(409);
+  await tool(s, 'shop-api', 'propose_release');
+  const notice = (await inbox(s, 'shop-api')).find((m) => m.startsWith('Release request '))!;
+  expect(notice).toContain('console queue');
+  expect(notice).toContain('do not show a dialog');
+  expect(notice).not.toContain('AskUserQuestion');
+});
+
+it('a dialog answer that does not count is reported to the main: reworded question (still waiting) or a request already settled', async () => {
+  const { s, t } = await boot();
+  const key = (await releaseKey(s, 'shop-api')).body.key as string;
+  await mergedTicket(s, t, 'fix-login', 'login.js');
+  await tool(s, 'shop-api', 'propose_release');
+  const { id, question } = askedQuestion(await inbox(s, 'shop-api'));
+  for (const m of (await mod(s, 'shop-api', '/v1/inbox')).body.messages) await mod(s, 'shop-api', '/v1/ack', 'POST', { id: m.id });
+
+  expect((await tool(s, 'shop-api', 'release_answer', { id, answer: 'approve', question: `${question} please`, key })).body).toEqual({ status: 'error', code: 'unknown_request' });
+  const reworded = (await inbox(s, 'shop-api')).join('\n');
+  expect(reworded).toContain(`Release request ${id}: the answer given in your dialog did not count`);
+  expect(reworded).toContain('still waiting in the console queue');
+  expect(reworded).toContain(JSON.stringify(question)); // the exact question to show again
+  for (const m of (await mod(s, 'shop-api', '/v1/inbox')).body.messages) await mod(s, 'shop-api', '/v1/ack', 'POST', { id: m.id });
+
+  expect((await ui(s, `/api/queue/${id}/answer`, 'POST', { answer: 'reject' })).status).toBe(200);
+  expect((await tool(s, 'shop-api', 'release_answer', { id, answer: 'approve', question, key })).body).toEqual({ status: 'error', code: 'unknown_request' });
+  const settled = (await inbox(s, 'shop-api')).join('\n');
+  expect(settled).toContain(`Release request ${id}: the answer given in your dialog did not count, because the request is no longer waiting`);
 });
 
 it('the release key goes to the main once, only before it did anything else, and never to an agent', async () => {

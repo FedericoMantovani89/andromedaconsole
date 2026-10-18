@@ -303,22 +303,29 @@ async function onSimpleEvent(/** @type {Engine} */ $, /** @type {string} */ type
  * transcript holds each answered call with the engine's record `{ questions, answers: { <question>: <label> } }` (verified with the real
  * engine, Task 4 spike). The answer is posted once per request, with the release key; the console checks the request and the question.
  */
+/** The dialog showed this question with exactly the console's options, Reject then Approve (a stray Enter rejects). */
+function showedReleaseOptions(/** @type {any[]} */ questions, /** @type {string} */ question) {
+  const q = questions.find((/** @type {any} */ x) => x && x.question === question);
+  const labels = q && Array.isArray(q.options) ? q.options.map((/** @type {any} */ o) => (o && typeof o.label === 'string' ? o.label : '')) : [];
+  return labels.length === 2 && labels[0] === 'Reject' && labels[1] === 'Approve';
+}
+
 async function postReleaseAnswers(/** @type {Engine} */ $) {
   if (!ctx || ctx.role !== 'main' || !releaseKey) return;
   const messages = await $.session.messages();
   if (!Array.isArray(messages)) return;
   for (const m of messages) {
     for (const use of (m && Array.isArray(m.toolUses) ? m.toolUses : [])) {
-      if (!use || use.tool !== 'AskUserQuestion' || use.isError) continue;
+      // A record without its call id cannot be told apart from the next one: never posted.
+      if (!use || use.tool !== 'AskUserQuestion' || use.isError || typeof use.tool_use_id !== 'string' || use.tool_use_id === '') continue;
       // Only what the dialog showed counts: a question the model put in its own input (never pre-filled answers), answered by the user.
       const input = /** @type {any} */ (use.input);
       if (!input || typeof input !== 'object' || input.answers !== undefined || input.annotations !== undefined || !Array.isArray(input.questions)) continue;
-      const shown = input.questions.map((/** @type {any} */ q) => (q && typeof q.question === 'string' ? q.question : ''));
       const record = /** @type {any} */ (use.result);
       const answers = record && typeof record === 'object' && record.answers && typeof record.answers === 'object' ? record.answers : undefined;
       if (!answers) continue;
       for (const question of Object.keys(answers)) {
-        if (shown.indexOf(question) === -1) continue;
+        if (!showedReleaseOptions(input.questions, question)) continue;
         const found = RELEASE_QUESTION.exec(question);
         const label = String(answers[question]);
         const answer = label === 'Approve' || label === 'Reject' ? RELEASE_ANSWERS[label] : undefined;

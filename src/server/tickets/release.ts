@@ -29,6 +29,8 @@ export interface ReleaseDeps {
   isOpen?(id: string): boolean;
   /** Answers the confirmation in the queue (the same path as the console's own buttons); absent: the dialog answer is not accepted. */
   answer?(id: string, answer: 'approve' | 'reject'): 'ok' | 'unknown' | 'already' | 'invalid';
+  /** Whether the main's mod holds a release key, so its dialog answer can reach the console (default: yes). Without it, the queue only. */
+  dialogReadable?(): boolean;
   /** A ticket changed status in the background (after the user approved): push the state to the UI. */
   changed?(): void;
 }
@@ -53,12 +55,20 @@ export function releaseQuestion(o: { id: string; project: string; targets: strin
     + `${o.files} file${o.files === 1 ? '' : 's'} changed, ${tests}. Approve?`;
 }
 
-/** The message the main gets when a release is asked: show this dialog as written, and leave the answer to the console. */
-function releaseNotice(id: string, question: string): string {
+/**
+ * The message the main gets when a release is asked (or asked again): show this dialog as written, and leave the answer to the console.
+ * A main whose mod has no release key cannot pass a dialog answer on, so it is told to send the user to the console queue instead.
+ */
+function releaseNotice(id: string, question: string, readable: boolean): string {
+  if (!readable) {
+    return `Release request ${id} is waiting for the user in the console queue. This session cannot pass a dialog answer to the console (its mod has no release key; `
+      + 'a restart of the main gets one), so do not show a dialog for it: tell the user to approve or reject it in the console queue. The console tells you the outcome.';
+  }
   return `Release request ${id} is waiting for the user. Show it now with AskUserQuestion, exactly as written (one question, nothing reworded): `
     + `question ${JSON.stringify(question)}, header "Release", options in this order "Reject" (nothing is merged or pushed) and "Approve" (merge into main and push to origin), multiSelect false. `
     + 'Do nothing else with the answer: the console reads it from the dialog and acts on it, then tells you the outcome. '
-    + 'The user may answer in the console queue instead; either answer closes both.';
+    + 'The user may also answer in the console queue, and the first answer counts. An answer there does not close your dialog: '
+    + 'if the user answers the dialog afterwards, the console ignores that answer and tells you so.';
 }
 
 /** The queue refuses payloads above 100,000 characters: the reports are shortened to fit, never the tickets or the files. */
@@ -107,7 +117,11 @@ export class ReleaseService {
     const merged = this.d.tickets.list().filter((t) => t.status === 'merged');
     if (merged.length === 0) return { status: 'nothing_to_release' };
     const waiting = this.pendingRequest();
-    if (waiting) return { status: 'already_asked', id: waiting.id };
+    if (waiting) {
+      // The main asks again because it lost the dialog (a restart, a compacted context): give it the same question back.
+      if (this.pending?.question !== undefined) this.d.notifyMain(releaseNotice(waiting.id, this.pending.question, this.readable()));
+      return { status: 'already_asked', id: waiting.id };
+    }
     const groups = new Map<string, Ticket[]>();
     for (const t of merged) groups.set(t.repo ?? '', [...(groups.get(t.repo ?? '') ?? []), t]);
     const items: Item[] = [];
@@ -137,9 +151,11 @@ export class ReleaseService {
     );
     const question = releaseQuestion({ id, project: this.d.project, targets, slugs, files: files.length, tests, ...(named ? { repos: items.map((i) => i.repo) } : {}) });
     this.pending = { id, items, question };
-    this.d.notifyMain(releaseNotice(id, question));
+    this.d.notifyMain(releaseNotice(id, question, this.readable()));
     return { status: 'asked', id };
   }
+
+  private readable(): boolean { return this.d.dialogReadable ? this.d.dialogReadable() : true; }
 
   /**
    * The user's answer to the main's own release dialog (SPEC 15.5, 20.5), posted by the mod with the release key. It counts only for the
@@ -147,9 +163,18 @@ export class ReleaseService {
    * so the first answer, from either place, is the one that counts.
    */
   answerFromDialog(id: string, answer: 'approve' | 'reject', question: string): { status: 'ok' } | { status: 'error'; code: 'unknown_request' } {
+    const refused = { status: 'error', code: 'unknown_request' } as const;
     const waiting = this.pendingRequest();
-    if (!waiting || waiting.id !== id || this.pending?.question === undefined || question.trim() !== this.pending.question || !this.d.answer) return { status: 'error', code: 'unknown_request' };
-    return this.d.answer(id, answer) === 'ok' ? { status: 'ok' } : { status: 'error', code: 'unknown_request' };
+    // The user answered a dialog that no longer counts: the main was told the console reports the outcome, so it is told this too.
+    if (!waiting || waiting.id !== id || this.pending?.question === undefined || !this.d.answer) {
+      this.d.notifyMain(`Release request ${id}: the answer given in your dialog did not count, because the request is no longer waiting (it was already answered in the console queue, or withdrawn). Do not act on that answer; call propose_release again only if the user still wants a release.`);
+      return refused;
+    }
+    if (question.trim() !== this.pending.question) {
+      this.d.notifyMain(`Release request ${id}: the answer given in your dialog did not count, because the dialog's question was not exactly the console's text. The request is still waiting in the console queue. ${releaseNotice(id, this.pending.question, true)}`);
+      return refused;
+    }
+    return this.d.answer(id, answer) === 'ok' ? { status: 'ok' } : refused;
   }
 
   /** Everything the proposal needs from one repository: its target branch, the project worktree, the tests on it, what would be pushed. */

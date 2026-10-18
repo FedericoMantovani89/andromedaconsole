@@ -114,6 +114,35 @@ function cloneTargets(argv: string[]): string[] {
   return out;
 }
 
+/** `sed -i`, `sed -i.bak`, `sed -ni`, `sed --in-place[=.bak]`; `perl -i`, `perl -pi`, `perl -i.bak`, `perl -pie`: the command rewrites its files. */
+const SED_IN_PLACE = /^(-[a-zA-Z]*i|--in-place(=.*)?)$|^-i.+$/;
+const PERL_IN_PLACE = /^-(?![IMm])[a-zA-Z]*i/; // not `-Ilib`, `-Mstrict`: those take a value that may contain an i
+/** Options whose value is the next word: sed's script (`-e`, `-f`), perl's code and modules (`-e`, `-E`, `-M`, `-m`, `-I`). */
+const SED_VALUE = /^(-e|-f|--expression|--file|-l|--line-length)$/;
+const PERL_VALUE = /^-[a-zA-Z]*[eE]$|^-[MmI]$/;
+
+/**
+ * The files an in-place editor rewrites (`sed -i 's/a/b/' f1 f2`, `perl -pi -e 'code' f`): every word after the script. Without `-e`/`-f`
+ * the first word is the script (sed) or the program file (perl), which is read, not written.
+ */
+function inPlaceTargets(name: string, rest: string[]): string[] {
+  const inPlace = name === 'sed' ? SED_IN_PLACE : name === 'perl' ? PERL_IN_PLACE : undefined;
+  if (!inPlace || !rest.some((t) => inPlace.test(t))) return [];
+  const value = name === 'sed' ? SED_VALUE : PERL_VALUE;
+  const words: string[] = [];
+  let scriptGiven = false;
+  for (let i = 0; i < rest.length; i++) {
+    const t = rest[i]!;
+    if (OP.test(t)) { i++; continue; }
+    if (/^(?:\d*|&)?>/.test(t)) continue;
+    if (value.test(t)) { scriptGiven = true; i++; continue; }
+    if (/^(--expression|--file)=/.test(t) || (name === 'perl' && /^-[a-zA-Z]*[eE].+/.test(t) && !/^-i/.test(t))) { scriptGiven = true; continue; }
+    if (isFlag(t)) continue;
+    words.push(t);
+  }
+  return scriptGiven ? words : words.slice(1);
+}
+
 /** Where a command's output is redirected to (`> f`, `>>f`, `2>f`); `2>&1` is not one. */
 export function redirectTargets(argv: string[]): string[] {
   const out: string[] = [];
@@ -133,6 +162,7 @@ export function writeTargets(argv: string[]): string[] {
   const rest = argv.slice(1);
   const out = redirectTargets(argv);
   if (DOWNLOADERS.has(name)) out.push(...downloadOutputs(name, argv).filter((t) => !URL_LIKE.test(t)));
+  out.push(...inPlaceTargets(name, rest));
   if (name === 'git') out.push(...cloneTargets(argv));
   const dirs = targetDirectories(name, rest);
   out.push(...dirs);

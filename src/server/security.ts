@@ -48,6 +48,11 @@ export class SessionTokens {
     return key;
   }
 
+  /** Whether a release key was handed out for this token (its session can pass a dialog answer on). */
+  hasReleaseKey(token: string): boolean {
+    return typeof this.releaseKeys.get(token) === 'string';
+  }
+
   /** Whether `key` is the release key issued to this token. */
   checkReleaseKey(token: string, key: unknown): boolean {
     const k = this.releaseKeys.get(token);

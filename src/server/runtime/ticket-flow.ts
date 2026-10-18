@@ -122,6 +122,7 @@ export function registerTicketFlow(c: ProjectContainer): void {
     const reportLanguage = k.get('reportLanguage');
     const inbox = k.get('inbox');
     const questions = k.get('questions');
+    const tokens = k.get('tokens');
     return new ReleaseService({
       tickets, root: o.projectRoot, project: projectName,
       testCommand: testCommandAt('release'),
@@ -133,6 +134,8 @@ export function registerTicketFlow(c: ProjectContainer): void {
       askConfirm: (q, onAnswer) => questions.ask({ from: CONSOLE_FROM, text: q.text, kind: 'confirm', payload: q.payload }, onAnswer).id,
       isOpen: (id) => questions.pending().some((q) => q.id === id),
       answer: (id, answer) => questions.answer(id, answer),
+      // The main's mod got its release key at start (the token is the main's current one): only then can a dialog answer reach the console.
+      dialogReadable: () => { const t = tokens.tokenFor(projectName); return t !== undefined && tokens.hasReleaseKey(t); },
       changed: () => shared.broadcastAll(),
     });
   });
