@@ -342,7 +342,7 @@ it('the dialog answer with the key approves: the console releases, and a second 
 
   // a wrong id, an answer that is not approve/reject, or a reworded question do nothing
   expect((await tool(s, 'shop-api', 'release_answer', { id: 'other', answer: 'approve', question, key })).body).toEqual({ status: 'error', code: 'unknown_request' });
-  expect((await tool(s, 'shop-api', 'release_answer', { id, answer: 'yes', question, key })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
+  expect((await tool(s, 'shop-api', 'release_answer', { id, answer: 'yes', question, key })).body).toEqual({ status: 'error', code: 'bad_request' });
   expect((await tool(s, 'shop-api', 'release_answer', { id, answer: 'approve', question: 'Shall we have lunch?', key })).body).toEqual({ status: 'error', code: 'unknown_request' });
   expect(await queue(s)).toHaveLength(1);
 

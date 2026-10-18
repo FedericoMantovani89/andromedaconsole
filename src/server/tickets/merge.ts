@@ -83,7 +83,7 @@ export class MergeService {
   private answered(slug: string): Promise<MergeResult> | undefined {
     const ticket = this.d.tickets.get(slug);
     const kept = this.outcomes.get(slug);
-    if (ticket?.status === 'merged' && ticket.mergedSha) {
+    if ((ticket?.status === 'merged' || ticket?.status === 'released') && ticket.mergedSha) { // a released ticket was merged first
       const same = kept?.result.status === 'merged' && kept.result.sha === ticket.mergedSha;
       return Promise.resolve(same ? kept.result : { status: 'merged', sha: ticket.mergedSha });
     }

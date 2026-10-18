@@ -111,6 +111,19 @@ describe('merge_ticket as a detached job', () => {
     expect(runs).toBe(0);
   });
 
+  it('a released ticket was merged too: it answers "merged" with its sha without touching git', async () => {
+    await approvedTicket('a-job', { 'src/a.js': 'a\n' });
+    testDelayMs = 0;
+    const merged = await service().mergeTicket('a-job', { waitMs: 15_000 });
+    const sha = (merged as { sha: string }).sha;
+    tickets.move('a-job', 'released');
+    vi.mocked(git).mockClear();
+    runs = 0;
+    expect(await service().mergeTicket('a-job', { waitMs: 50 })).toEqual({ status: 'merged', sha });
+    expect(vi.mocked(git)).not.toHaveBeenCalled();
+    expect(runs).toBe(0);
+  });
+
   it('two calls at the same moment share one job', async () => {
     await approvedTicket('a-job', { 'src/a.js': 'a\n' });
     const svc = service();

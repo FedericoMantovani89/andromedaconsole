@@ -70,7 +70,7 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
     // Called by the mod alone (v1 checks the release key): the user's answer to the main's AskUserQuestion release dialog.
     release_answer: async (_slug, body) => {
       const b = (typeof body === 'object' && body !== null ? body : {}) as { id?: unknown; answer?: unknown; question?: unknown };
-      if (typeof b.id !== 'string' || (b.answer !== 'approve' && b.answer !== 'reject') || typeof b.question !== 'string') return badRequest('id and question are required and answer must be "approve" or "reject"');
+      if (typeof b.id !== 'string' || (b.answer !== 'approve' && b.answer !== 'reject') || typeof b.question !== 'string') return { status: 'error', code: 'bad_request' };
       return release.answerFromDialog(b.id, b.answer, b.question);
     },
     start_recovery: async (_slug, body) => {
