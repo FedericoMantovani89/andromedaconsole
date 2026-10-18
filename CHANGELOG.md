@@ -8,6 +8,8 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+- Fixed: a release request that is no longer in the queue is asked again instead of answering "already asked".
+
 ## [0.0.10] - 2026-10-15
 
 ### Changed

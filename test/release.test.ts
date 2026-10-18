@@ -7,7 +7,7 @@ import { installReleaseHook } from '../src/server/git/release-hook';
 import { loadBundles } from '../src/server/i18n-bundles';
 import { createTranslator } from '../src/shared/i18n';
 import { TicketStore } from '../src/server/tickets/store';
-import { ReleaseService } from '../src/server/tickets/release';
+import { ReleaseService, type ReleaseDeps } from '../src/server/tickets/release';
 import { writeReport } from '../src/server/tickets/report';
 
 vi.setConfig({ testTimeout: 90_000 });
@@ -26,14 +26,18 @@ beforeEach(async () => {
   tickets = new TicketStore(t.repo);
   command = `node -e "process.exit(require('fs').existsSync('BAD') ? 1 : 0)"`;
   main = []; asked = [];
-  svc = new ReleaseService({
+  svc = buildService();
+});
+function buildService(extra: Partial<ReleaseDeps> = {}): ReleaseService {
+  return new ReleaseService({
     tickets, root: t.repo, project: 'p',
     testCommand: () => command, testTimeoutMs: () => 30_000,
     language: () => ({ lang: 'en', t: createTranslator({ lang: 'en', messages: bundles.get('en') ?? {}, fallback: bundles.get('en') }) }),
     notifyMain: (text) => { main.push(text); },
     askConfirm: (q, onAnswer) => { asked.push({ ...q, answer: onAnswer }); return `q${asked.length}`; },
+    ...extra,
   });
-});
+}
 afterEach(() => removeDir(t.base));
 
 /** What merge_ticket leaves behind: a commit on the project branch and a ticket in `merged`. */
@@ -87,6 +91,33 @@ describe('proposeRelease', () => {
     expect(second).toMatchObject({ status: 'already_asked' });
     expect((second as { id?: string }).id).toBe((first as { id?: string }).id);
     expect(asked).toHaveLength(1);
+  });
+  it('a request still open answers already_asked with the same id', async () => {
+    svc = buildService({ isOpen: () => true });
+    await mergedTicket('a-job', 'a.txt');
+    const first = await svc.proposeRelease();
+    expect(await svc.proposeRelease()).toEqual({ status: 'already_asked', id: (first as { id: string }).id });
+    expect(svc.pendingRequest()).toEqual({ id: (first as { id: string }).id });
+    expect(asked).toHaveLength(1);
+  });
+  it('a request that vanished from the queue is asked again', async () => {
+    svc = buildService({ isOpen: () => false });
+    await mergedTicket('a-job', 'a.txt');
+    const first = await svc.proposeRelease();
+    expect(first).toMatchObject({ status: 'asked' });
+    expect(svc.pendingRequest()).toBeUndefined();
+    const second = await svc.proposeRelease();
+    expect(second).toMatchObject({ status: 'asked' });
+    expect((second as { id: string }).id).not.toBe((first as { id: string }).id);
+    expect(asked).toHaveLength(2);
+  });
+  it('pendingRequest is undefined after reject', async () => {
+    svc = buildService({ isOpen: () => true });
+    await mergedTicket('a-job', 'a.txt');
+    await svc.proposeRelease();
+    expect(svc.pendingRequest()).toBeDefined();
+    asked[0]!.answer('reject');
+    expect(svc.pendingRequest()).toBeUndefined();
   });
   it('does not bother the user when the tests of the project branch are red', async () => {
     await mergedTicket('a-job', 'BAD');

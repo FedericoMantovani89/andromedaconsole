@@ -25,6 +25,8 @@ export interface ReleaseDeps {
   notifyMain(text: string): void;
   /** Puts the confirmation in the user's queue (kind `confirm`) and returns its id; `onAnswer` runs with "approve" or "reject". */
   askConfirm(q: { text: string; payload: unknown }, onAnswer: (answer: string) => void): string;
+  /** Whether the queue still holds this confirmation (default: yes). A request answered or dropped elsewhere must not block a new one. */
+  isOpen?(id: string): boolean;
   /** A ticket changed status in the background (after the user approved): push the state to the UI. */
   changed?(): void;
 }
@@ -66,6 +68,12 @@ export class ReleaseService {
   /** Resolves when the release being performed (if any) is over. */
   idle(): Promise<void> { return this.inFlight; }
 
+  /** The confirmation waiting for the user, if the queue still holds it. */
+  pendingRequest(): { id: string } | undefined {
+    if (this.pending && this.d.isOpen && !this.d.isOpen(this.pending.id)) this.pending = undefined;
+    return this.pending ? { id: this.pending.id } : undefined;
+  }
+
   proposeRelease(): Promise<ProposeResult> {
     const run = this.proposing.then(() => this.propose(), () => this.propose());
     this.proposing = run.catch(() => undefined);
@@ -75,7 +83,8 @@ export class ReleaseService {
   private async propose(): Promise<ProposeResult> {
     const merged = this.d.tickets.list().filter((t) => t.status === 'merged');
     if (merged.length === 0) return { status: 'nothing_to_release' };
-    if (this.pending) return { status: 'already_asked', id: this.pending.id };
+    const waiting = this.pendingRequest();
+    if (waiting) return { status: 'already_asked', id: waiting.id };
     const groups = new Map<string, Ticket[]>();
     for (const t of merged) groups.set(t.repo ?? '', [...(groups.get(t.repo ?? '') ?? []), t]);
     const items: Item[] = [];
