@@ -63,6 +63,12 @@ describe('NotificationService: what notifies', () => {
     await s.advance(5000);
     expect(s.sent).toEqual([{ title: 'Question for you', message: 'fix-login: Which color?', open: 'http://127.0.0.1:1/?token=t&project=p#queue=q1', sound: true }]);
   });
+  it('a release confirmation from the console notifies once, titled for the release', async () => {
+    const s = setup();
+    s.svc.onItem(s.item('c1', { from: '@console', kind: 'confirm', text: 'Release project "p" (2 tickets) to origin/main?' }));
+    await s.advance(5000);
+    expect(s.sent).toEqual([{ title: 'Release to approve', message: 'Release project "p" (2 tickets) to origin/main?', open: 'http://127.0.0.1:1/?token=t&project=p#queue=c1', sound: true }]);
+  });
   it('a long text is shortened to 120 characters; console items show no sender', async () => {
     const s = setup();
     s.svc.onItem(s.item('q1', { from: '@console', kind: 'decision', text: 'x'.repeat(300) }));

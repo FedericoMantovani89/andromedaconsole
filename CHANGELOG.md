@@ -9,6 +9,7 @@ change that introduces the behaviour.
 ## [Unreleased]
 
 - Added: `list_agents` shows the main the release request that waits for the user (`release: { id, status: 'pending' }`), so it neither asks again nor forgets it.
+- Tests: a pending release confirmation is pinned to raise one desktop notice titled "Release to approve" (the queue badge and notice already existed).
 - Fixed: a release request that is no longer in the queue is asked again instead of answering "already asked".
 
 ## [0.0.10] - 2026-10-15
