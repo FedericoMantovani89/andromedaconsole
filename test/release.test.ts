@@ -33,7 +33,8 @@ function buildService(extra: Partial<ReleaseDeps> = {}): ReleaseService {
     tickets, root: t.repo, project: 'p',
     testCommand: () => command, testTimeoutMs: () => 30_000,
     language: () => ({ lang: 'en', t: createTranslator({ lang: 'en', messages: bundles.get('en') ?? {}, fallback: bundles.get('en') }) }),
-    notifyMain: (text) => { main.push(text); },
+    // The notice that a request is waiting (the dialog to show) is pinned in release-phone.test.ts; here only the outcomes count.
+    notifyMain: (text) => { if (!text.startsWith('Release request ')) main.push(text); },
     askConfirm: (q, onAnswer) => { asked.push({ ...q, answer: onAnswer }); return `q${asked.length}`; },
     ...extra,
   });

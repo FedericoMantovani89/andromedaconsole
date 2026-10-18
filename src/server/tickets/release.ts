@@ -27,6 +27,8 @@ export interface ReleaseDeps {
   askConfirm(q: { text: string; payload: unknown }, onAnswer: (answer: string) => void): string;
   /** Whether the queue still holds this confirmation (default: yes). A request answered or dropped elsewhere must not block a new one. */
   isOpen?(id: string): boolean;
+  /** Answers the confirmation in the queue (the same path as the console's own buttons); absent: the dialog answer is not accepted. */
+  answer?(id: string, answer: 'approve' | 'reject'): 'ok' | 'unknown' | 'already' | 'invalid';
   /** A ticket changed status in the background (after the user approved): push the state to the UI. */
   changed?(): void;
 }
@@ -38,6 +40,26 @@ export type ProposeResult =
   | { status: 'tests_failed'; tail: string }
   | { status: 'refused'; code: 'project_branch_checked_out' | 'git_failed' | 'no_main_branch'; detail?: string };
 
+/** How the release question starts: the mod finds the request id here in the main's AskUserQuestion. Keep in step with mod/hooks/register.js. */
+export const RELEASE_QUESTION_RE = /^\[release ([A-Za-z0-9-]{1,64})\] /;
+const QUESTION_SLUGS = 10;
+
+/** The one question the main shows with AskUserQuestion, and the console compares word for word: what is released, then the request id. */
+export function releaseQuestion(o: { id: string; project: string; targets: string; slugs: string[]; files: number; tests?: { ok: boolean; command: string } }): string {
+  const shown = o.slugs.slice(0, QUESTION_SLUGS).join(', ') + (o.slugs.length > QUESTION_SLUGS ? `, +${o.slugs.length - QUESTION_SLUGS} more` : '');
+  const tests = o.tests ? `tests passed (${o.tests.command})` : 'no test command, tests not run';
+  return `[release ${o.id}] Release project "${o.project}" to origin/${o.targets}: ${o.slugs.length} ticket${o.slugs.length === 1 ? '' : 's'} (${shown}), `
+    + `${o.files} file${o.files === 1 ? '' : 's'} changed, ${tests}. Approve?`;
+}
+
+/** The message the main gets when a release is asked: show this dialog as written, and leave the answer to the console. */
+function releaseNotice(id: string, question: string): string {
+  return `Release request ${id} is waiting for the user. Show it now with AskUserQuestion, exactly as written (one question, nothing reworded): `
+    + `question ${JSON.stringify(question)}, header "Release", options "Approve" (merge into main and push to origin) and "Reject" (nothing is merged or pushed), multiSelect false. `
+    + 'Do nothing else with the answer: the console reads it from the dialog and acts on it, then tells you the outcome. '
+    + 'The user may answer in the console queue instead; either answer closes both.';
+}
+
 /** The queue refuses payloads above 100,000 characters: the reports are shortened to fit, never the tickets or the files. */
 const PAYLOAD_BUDGET = 90_000;
 const MAX_REPORT_CHARS = 20_000;
@@ -46,7 +68,7 @@ const MAX_TICKETS = 20;
 
 /** One repository of the release: its name (relative to the project folder, `''` for the folder itself), where it lives, the branch it goes to, the approved project branch tip and its merged tickets. */
 interface Item { repo: string; path: string; target: string; tip: string; slugs: string[] }
-interface Pending { id: string; items: Item[] }
+interface Pending { id: string; items: Item[]; /** The exact question the main must show in its AskUserQuestion dialog. */ question?: string }
 type Failure = { code: string; text: string };
 interface Prepared { item: Item; files: ChangedFile[]; extraCommits: number; tests?: { ok: boolean; command: string; tail: string } }
 
@@ -112,8 +134,21 @@ export class ReleaseService {
       { text: `Release project "${this.d.project}" (${slugs.length} ticket${slugs.length === 1 ? '' : 's'}) to origin/${targets}?`, payload },
       (answer) => this.answered(answer, { id, items }),
     );
-    this.pending = { id, items };
+    const question = releaseQuestion({ id, project: this.d.project, targets, slugs, files: files.length, tests });
+    this.pending = { id, items, question };
+    this.d.notifyMain(releaseNotice(id, question));
     return { status: 'asked', id };
+  }
+
+  /**
+   * The user's answer to the main's own release dialog (SPEC 15.5, 20.5), posted by the mod with the release key. It counts only for the
+   * request still waiting and only when the dialog showed exactly the question the console wrote; it lands in the queue like a click there,
+   * so the first answer, from either place, is the one that counts.
+   */
+  answerFromDialog(id: string, answer: 'approve' | 'reject', question: string): { status: 'ok' } | { status: 'error'; code: 'unknown_request' } {
+    const waiting = this.pendingRequest();
+    if (!waiting || waiting.id !== id || this.pending?.question === undefined || question.trim() !== this.pending.question || !this.d.answer) return { status: 'error', code: 'unknown_request' };
+    return this.d.answer(id, answer) === 'ok' ? { status: 'ok' } : { status: 'error', code: 'unknown_request' };
   }
 
   /** Everything the proposal needs from one repository: its target branch, the project worktree, the tests on it, what would be pushed. */

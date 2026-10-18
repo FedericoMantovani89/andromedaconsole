@@ -52,7 +52,12 @@ const TOOL_ROLES: Record<string, Role[]> = {
   resume_agent: ['main'],
   // Phase 6A (SPEC 9.9): the console saves, pushes and removes a stale worktree on the main's request.
   worktree_cleanup: ['main'],
+  // SPEC 15.5: the mod posts the user's answer to the main's release dialog. No session has it as a tool, and it needs the release key.
+  release_answer: ['main'],
 };
+
+/** Console tools that only the mod itself may call: the body carries the release key the console handed it at session start. */
+const RELEASE_KEY_TOOLS = ['release_answer'];
 
 /**
  * The channel mod -> console. Authenticated by the per-session token only: the UI token does not work here, and the
@@ -64,11 +69,19 @@ export async function handleV1(ctx: V1Context, req: IncomingMessage, res: Server
   if (!slug) return fail(res, 401, 'unauthorized');
   const path = url.pathname;
 
+  // The release key (SPEC 15.5): only the main, only once, only before its token did anything but session.start.
+  if (req.method === 'POST' && path === '/v1/release_key') {
+    if (ctx.registry.get(slug)?.role !== 'main') { ctx.tokens.touch(token!); return fail(res, 403, 'forbidden'); }
+    const key = ctx.tokens.issueReleaseKey(token!);
+    return key ? send(res, 200, { key }) : fail(res, 409, 'already_issued');
+  }
+
   if (req.method === 'POST' && path === '/v1/events') {
     // turn.complete carries the whole final answer: allow well above the 200 KiB the reading store keeps (JSON escaping adds more).
     const body = await readBodyOr400(req, res, 2 * 1024 * 1024);
     if (body === undefined) return;
     const b = (typeof body === 'object' && body !== null ? body : {}) as { type?: unknown; sessionId?: unknown; data?: unknown };
+    if (b.type !== 'session.start') ctx.tokens.touch(token!);
     if (!EVENT_TYPES.includes(b.type as ModEvent['type']) || typeof b.sessionId !== 'string') return fail(res, 400, 'bad_request');
     const data = typeof b.data === 'object' && b.data !== null ? (b.data as Record<string, unknown>) : undefined;
     ctx.handleModEvent(slug, { type: b.type as ModEvent['type'], sessionId: b.sessionId, data });
@@ -76,6 +89,8 @@ export async function handleV1(ctx: V1Context, req: IncomingMessage, res: Server
     res.end();
     return;
   }
+
+  ctx.tokens.touch(token!); // anything but session.start spends the chance to get a release key
 
   if (req.method === 'GET' && path === '/v1/inbox') return send(res, 200, { messages: ctx.inbox.pending(slug) });
 
@@ -120,6 +135,8 @@ export async function handleV1(ctx: V1Context, req: IncomingMessage, res: Server
     if (!handler) return fail(res, 404, 'not_found');
     const body = await readBodyOr400(req, res);
     if (body === undefined) return;
+    // The user's answer to a release, read by the mod from the main's own dialog: it needs the release key, which the model never sees.
+    if (RELEASE_KEY_TOOLS.includes(name) && !ctx.tokens.checkReleaseKey(token!, (body as { key?: unknown } | null)?.key)) return fail(res, 403, 'forbidden');
     try { ctx.activity?.(slug); } catch { /* bookkeeping must not change the answer */ }
     try {
       const result = await handler(slug, body);

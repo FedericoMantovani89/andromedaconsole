@@ -132,6 +132,7 @@ export function registerTicketFlow(c: ProjectContainer): void {
       notifyMain: (text) => { inbox.push(projectName, text); },
       askConfirm: (q, onAnswer) => questions.ask({ from: CONSOLE_FROM, text: q.text, kind: 'confirm', payload: q.payload }, onAnswer).id,
       isOpen: (id) => questions.pending().some((q) => q.id === id),
+      answer: (id, answer) => questions.answer(id, answer),
       changed: () => shared.broadcastAll(),
     });
   });

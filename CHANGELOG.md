@@ -11,6 +11,7 @@ change that introduces the behaviour.
 - Added: `list_agents` shows the main the release request that waits for the user (`release: { id, status: 'pending' }`), so it neither asks again nor forgets it.
 - Tests: a pending release confirmation is pinned to raise one desktop notice titled "Release to approve" (the queue badge and notice already existed).
 - Fixed: a release request that is no longer in the queue is asked again instead of answering "already asked".
+- Added: a release can be approved or rejected from the Claude app: the main shows the request in its own AskUserQuestion dialog and the mod posts the user's choice with a per-session release key the model never sees.
 
 ## [0.0.10] - 2026-10-15
 

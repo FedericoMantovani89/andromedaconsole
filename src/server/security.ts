@@ -24,8 +24,34 @@ export class SessionTokens {
 
   revoke(slug: string): void {
     const t = this.bySlug.get(slug);
-    if (t) this.byToken.delete(t);
+    if (t) { this.byToken.delete(t); this.releaseKeys.delete(t); }
     this.bySlug.delete(slug);
+  }
+
+  /**
+   * The release key (SPEC 15.5): a second secret the mod holds in memory, never in the environment, so the session's model cannot read it
+   * with a shell command the way it can read the token. It is handed out once per token and only as the session's first request after
+   * `session.start`: once the token did anything else (a turn, a guard question, a tool), no key is issued for it any more. `null`: spent.
+   */
+  private readonly releaseKeys = new Map<string, string | null>();
+
+  /** The token did something: from now on no release key is issued for it. */
+  touch(token: string): void {
+    if (!this.releaseKeys.has(token)) this.releaseKeys.set(token, null);
+  }
+
+  /** The release key of this token, the first time only; undefined afterwards (or after the token was used for anything else). */
+  issueReleaseKey(token: string): string | undefined {
+    if (this.releaseKeys.has(token) || this.slugFor(token) === undefined) return undefined;
+    const key = createToken();
+    this.releaseKeys.set(token, key);
+    return key;
+  }
+
+  /** Whether `key` is the release key issued to this token. */
+  checkReleaseKey(token: string, key: unknown): boolean {
+    const k = this.releaseKeys.get(token);
+    return typeof k === 'string' && typeof key === 'string' && tokensEqual(k, key);
   }
 }
 

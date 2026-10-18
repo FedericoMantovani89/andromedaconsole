@@ -15,6 +15,18 @@ let started = false; // the poller and the tools are set up once per process, ev
 /** @type {{ url: string, token: string, role: string, agent: string, sid: string } | null} */
 let ctx = null; // { url, token, role, agent, sid } once session.start has run inside a console session
 
+/**
+ * The main's release key (SPEC 15.5): asked once at session start, kept here in memory and never in the environment, so the model cannot
+ * read it with a shell command the way it can read CONSOLE_TOKEN. Only with it does the console take the user's answer to a release dialog.
+ */
+let releaseKey = '';
+/** @type {Record<string, true>} release requests whose dialog answer was already posted */
+const releasesPosted = {};
+/** How the console's release question starts (src/server/tickets/release.ts, RELEASE_QUESTION_RE). */
+const RELEASE_QUESTION = /^\[release ([A-Za-z0-9-]{1,64})\] /;
+/** The only two answers that count: the labels of the dialog's options, exactly. Free text typed under "Other" is ignored. */
+const RELEASE_ANSWERS = { Approve: 'approve', Reject: 'reject' };
+
 const POLL_MS = 2000;
 const QUESTION_WAIT_SECONDS = 15; // each long-poll stays short; the loop below repeats it (verified: 75 s total works)
 const MAX_CONSOLE_FAILURES = 20; // consecutive unreachable-console answers before a waiting tool gives up
@@ -259,6 +271,11 @@ async function onSessionStart(/** @type {Engine} */ $, /** @type {Ev} */ e, /** 
         agent: (await $.env.get('CONSOLE_AGENT')) || '',
         sid: await $.session.id(),
       };
+      // First, before anything else uses the token: the console hands the key out only as the session's first request.
+      if (ctx.role === 'main' && !releaseKey) {
+        const k = await call($, 'POST', '/v1/release_key', {});
+        if (k.ok && k.json && typeof k.json.key === 'string') releaseKey = k.json.key;
+      }
       if (!started) {
         started = true;
         try { await registerRoleTools($); } catch (err) { /* events and the inbox still work without the tools */ }
@@ -277,6 +294,39 @@ async function onSimpleEvent(/** @type {Engine} */ $, /** @type {string} */ type
     if (ctx) await postEvent($, type, data);
   } catch (err) { /* never into the session */ }
   return next(e);
+}
+
+/**
+ * The user's answer to a release, given in the main's own AskUserQuestion dialog (so from the Claude app too): at the end of a turn the
+ * transcript holds each answered call with the engine's record `{ questions, answers: { <question>: <label> } }` (verified with the real
+ * engine, Task 4 spike). The answer is posted once per request, with the release key; the console checks the request and the question.
+ */
+async function postReleaseAnswers(/** @type {Engine} */ $) {
+  if (!ctx || ctx.role !== 'main' || !releaseKey) return;
+  const messages = await $.session.messages();
+  if (!Array.isArray(messages)) return;
+  for (const m of messages) {
+    for (const use of (m && Array.isArray(m.toolUses) ? m.toolUses : [])) {
+      if (!use || use.tool !== 'AskUserQuestion' || use.isError) continue;
+      const record = /** @type {any} */ (use.result);
+      const answers = record && typeof record === 'object' && record.answers && typeof record.answers === 'object' ? record.answers : undefined;
+      if (!answers) continue;
+      for (const question of Object.keys(answers)) {
+        const found = RELEASE_QUESTION.exec(question);
+        const label = String(answers[question]);
+        const answer = label === 'Approve' || label === 'Reject' ? RELEASE_ANSWERS[label] : undefined;
+        const id = found ? String(found[1]) : '';
+        if (!id || !answer || releasesPosted[id]) continue;
+        const r = await call($, 'POST', '/v1/tools/release_answer', { id, answer, question, key: releaseKey });
+        if (r.json) releasesPosted[id] = true; // the console answered (ok or unknown_request): never again; unreachable: next turn
+      }
+    }
+  }
+}
+
+async function onTurnComplete(/** @type {Engine} */ $, /** @type {Ev} */ e, /** @type {Next} */ next) {
+  try { await postReleaseAnswers($); } catch (err) { /* never into the session */ }
+  return onSimpleEvent($, 'turn.complete', { turn: e.turnId, answer: e.answer, isAborted: e.isAborted, durationMs: e.durationMs }, e, next);
 }
 
 /** Waits for the human's answer with short long-polls, so no single call is long and nothing hangs forever. */
@@ -360,6 +410,11 @@ async function onNativeQuestion(/** @type {Engine} */ $, /** @type {Ev} */ e, /*
   try {
     if (ctx && ctx.role === 'agent') {
       return { deny: 'You cannot ask the user directly. Ask the main session instead: mcp__console-mod__send_message {type: "question", to: <the main, see list_agents>, text} with the question and, if it has fixed choices, every option written out; the answer arrives later as a message.' };
+    }
+    // The model fills in no answer of its own to a release question: only the user's choice in the dialog counts.
+    if (ctx && ctx.role === 'main' && e.answers !== undefined && Array.isArray(e.questions)
+      && e.questions.some((/** @type {Ev} */ q) => q && RELEASE_QUESTION.test(String(q.question)))) {
+      return { deny: 'Show the release question without an answers field: the user chooses in the dialog.' };
     }
     if (!ctx || ctx.role === 'main' || !Array.isArray(e.questions) || e.questions.length === 0) return next(e);
     /** @type {Record<string, string>} */
@@ -460,8 +515,8 @@ export const register = (on) => {
   on('session.start', ($, e, next) => onSessionStart($, e, next));
   on('session.end', ($, e, next) => onSimpleEvent($, 'session.end', {}, e, next));
   on('turn.start', ($, e, next) => onSimpleEvent($, 'turn.start', {}, e, next));
-  on('turn.complete', ($, e, next) => onSimpleEvent($, 'turn.complete',
-    { turn: e.turnId, answer: e.answer, isAborted: e.isAborted, durationMs: e.durationMs }, e, next));
+  // One hook per event without a matcher: the engine refuses a second turn.complete hook (seen in the Task 4 spike).
+  on('turn.complete', ($, e, next) => onTurnComplete($, e, next));
 
   on('tool.call', { tool: 'mcp__console-mod__spawn_agent' }, ($, e) => onConsoleTool($, 'spawn_agent', e));
   on('tool.call', { tool: 'mcp__console-mod__list_agents' }, ($, e) => onConsoleTool($, 'list_agents', e));

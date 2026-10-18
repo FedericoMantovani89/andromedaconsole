@@ -5,7 +5,7 @@ import type { ProjectContainer } from '../services';
 const STEP_DONE_WAIT_MS = 15_000;
 
 /** The console tools of a ticket's life: steps, review, recovery, release and merge. */
-export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checklist_set' | 'step_done' | 'report_blocked' | 'ticket_report' | 'request_review' | 'send_back_ticket' | 'review_verdict' | 'propose_release' | 'start_recovery' | 'recovery_report' | 'merge_ticket'> {
+export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checklist_set' | 'step_done' | 'report_blocked' | 'ticket_report' | 'request_review' | 'send_back_ticket' | 'review_verdict' | 'propose_release' | 'release_answer' | 'start_recovery' | 'recovery_report' | 'merge_ticket'> {
   const restrictions = k.get('restrictions');
   const steps = k.get('steps');
   const review = k.get('review');
@@ -62,6 +62,12 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
       return { status: 'ok', ...rest };
     },
     propose_release: async () => release.proposeRelease(),
+    // Called by the mod alone (v1 checks the release key): the user's answer to the main's AskUserQuestion release dialog.
+    release_answer: async (_slug, body) => {
+      const b = (typeof body === 'object' && body !== null ? body : {}) as { id?: unknown; answer?: unknown; question?: unknown };
+      if (typeof b.id !== 'string' || (b.answer !== 'approve' && b.answer !== 'reject') || typeof b.question !== 'string') return { status: 'error', code: 'bad_request' };
+      return release.answerFromDialog(b.id, b.answer, b.question);
+    },
     start_recovery: async (_slug, body) => {
       const name = (body as { name?: unknown } | null)?.name;
       if (typeof name !== 'string' || name === '') return { status: 'error', code: 'bad_request' };
