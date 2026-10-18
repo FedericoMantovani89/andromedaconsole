@@ -13,7 +13,7 @@ describe('profiles API', () => {
     const s = await bootServer();
     const first = await ui(s, '/api/profiles');
     expect(first.status).toBe(200);
-    expect(first.body.map((p: { name: string }) => p.name)).toEqual(['developer', 'reviewer', 'recovery']);
+    expect(first.body.map((p: { name: string }) => p.name)).toEqual(['developer', 'backend', 'frontend', 'dba', 'reviewer', 'recovery']);
     expect(first.body.every((p: { shipped: boolean; userFile: boolean }) => p.shipped && !p.userFile)).toBe(true);
 
     const made = await ui(s, '/api/profiles/docs-writer', 'PUT', entry({ budgetTokens: 250000, readOnly: true, model: 'claude-opus-5-5' }));

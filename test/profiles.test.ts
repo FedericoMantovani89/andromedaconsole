@@ -6,13 +6,50 @@ import { loadProfile, renderAgentPrompt, renderMainPrompt, languageName } from '
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'prof-'));
 
-it('the five shipped profiles exist and parse', () => {
-  for (const name of ['developer', 'reviewer', 'recovery']) {
+it('the six shipped profiles exist and parse', () => {
+  for (const name of ['developer', 'backend', 'frontend', 'dba', 'reviewer', 'recovery']) {
     const p = loadProfile(name, tmp(), tmp());
     expect(p, name).toBeDefined();
     expect(p!.description.length).toBeGreaterThan(5);
     expect(p!.body.length).toBeGreaterThan(20);
   }
+});
+describe('the shipped working profiles and their shared rules', () => {
+  const WORKING = ['developer', 'backend', 'frontend', 'dba'];
+  it('backend, frontend and dba are shipped, with a description and a token budget', () => {
+    for (const name of ['backend', 'frontend', 'dba']) {
+      const p = loadProfile(name, tmp(), tmp());
+      expect(p, name).toBeDefined();
+      expect(p!.source, name).toBe('shipped');
+      expect(p!.description.length, name).toBeGreaterThan(5);
+      expect(p!.budgetTokens, name).toBeGreaterThanOrEqual(1000);
+      expect(p!.readOnly, name).toBe(false);
+    }
+  });
+  it('the four descriptions are distinct and short (the console chooses a profile by them)', () => {
+    const descriptions = WORKING.map((n) => loadProfile(n, tmp(), tmp())!.description);
+    expect(new Set(descriptions).size).toBe(WORKING.length);
+    for (const d of descriptions) expect(d.length, d).toBeLessThan(160);
+  });
+  it('each working profile carries the contract and answer rules, so an override of one does not lose them in the others', () => {
+    for (const name of WORKING) {
+      const body = loadProfile(name, tmp(), tmp())!.body.toLowerCase();
+      expect(body, name).toContain('publish the contract first');
+      expect(body, name).toContain("answer a colleague's request before");
+    }
+  });
+  it('the dba proves a migration on a clone, never on the shared database first, and says when a remote database cannot be cloned', () => {
+    const body = loadProfile('dba', tmp(), tmp())!.body.toLowerCase();
+    expect(body).toContain('never run a migration on the shared database');
+    expect(body).toContain('clone');
+    expect(body).toMatch(/remote[^.]*cannot be cloned/);
+  });
+  it('a project-level developer.md still overrides the shipped one', () => {
+    const project = tmp();
+    mkdirSync(join(project, '.andromedaconsole', 'profiles'), { recursive: true });
+    writeFileSync(join(project, '.andromedaconsole', 'profiles', 'developer.md'), '---\nname: developer\ndescription: ours\n---\nOUR RULES');
+    expect(loadProfile('developer', project, tmp())).toMatchObject({ source: 'project', description: 'ours', body: 'OUR RULES' });
+  });
 });
 it('the project profile overrides the user profile, which overrides the shipped one', () => {
   const project = tmp(), user = tmp();

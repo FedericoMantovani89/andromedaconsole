@@ -68,9 +68,9 @@ it('PUT /api/project sets and echoes the new fields, clears them, and validates 
 
 it('the project profiles are what the picker shows and what spawn accepts; an internal spawn is exempt', async () => {
   const s = await bootServer();
-  expect((await state(s)).profiles).toEqual(['developer']); // reviewer and recovery are started by the console, not picked
+  expect((await state(s)).profiles).toEqual(['developer', 'backend', 'frontend', 'dba']); // reviewer and recovery are started by the console, not picked
   expect((await ui(s, '/api/profiles/other-prof', 'PUT', { name: 'other-prof', description: 'd', model: '', budgetTokens: null, readOnly: false, body: 'B' })).status).toBe(200);
-  expect((await state(s)).profiles).toEqual(['developer', 'other-prof']);
+  expect((await state(s)).profiles).toEqual(['developer', 'backend', 'frontend', 'dba', 'other-prof']);
   expect((await put(s, { profiles: ['developer'] })).status).toBe(200);
   expect((await state(s)).profiles).toEqual(['developer']);
   const refused = await ui(s, '/api/agents', 'POST', { slug: 'ui-work', profile: 'other-prof' });
@@ -79,7 +79,7 @@ it('the project profiles are what the picker shows and what spawn accepts; an in
   expect((await spawn(s, 'ui-work', { profile: 'other-prof' })).body).toMatchObject({ status: 'error', code: 'profile.invalid' });
   expect((await ui(s, '/api/agents', 'POST', { slug: 'api-work', profile: 'developer' })).status).toBe(201);
   await put(s, { profiles: [] }); // clears: everything is offered again
-  expect((await state(s)).profiles).toEqual(['developer', 'other-prof']);
+  expect((await state(s)).profiles).toEqual(['developer', 'backend', 'frontend', 'dba', 'other-prof']);
 });
 
 it('model: the request beats the project; the project is used when nothing else names one', async () => {

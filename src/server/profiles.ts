@@ -49,7 +49,7 @@ export function loadProfile(name: string, projectRoot: string, userDir: string =
 }
 
 const shippedDir = (): string => join(promptsDir(), 'profiles');
-const SHIPPED_ORDER = ['developer', 'reviewer', 'recovery'];
+const SHIPPED_ORDER = ['developer', 'backend', 'frontend', 'dba', 'reviewer', 'recovery'];
 
 function namesIn(dir: string): string[] {
   try { return readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).filter((n) => SLUG_RE.test(n)); } catch { return []; }
