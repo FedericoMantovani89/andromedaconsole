@@ -10,6 +10,10 @@ import { applyTemplate } from '../src/server/templates/apply';
 import { copyProjectSettings } from '../src/server/templates/copy';
 import { autoClose, bootServer, state, ui } from './helpers';
 import { makeMultiRepo, removeDir } from './git-helpers';
+import { Container } from '../src/server/runtime/container';
+import type { Env } from '../src/server/runtime/env';
+import type { Services } from '../src/server/runtime/services';
+import { registerTests } from '../src/server/runtime/tests';
 
 vi.setConfig({ testTimeout: 60_000 });
 autoClose();
@@ -169,6 +173,30 @@ describe("a repository's own test command (repoTestCommands, keyed by the reposi
       expect((await put({ repoTestCommands: { 'abc-be': '' } })).body).toEqual({});
       expect((await state(s)).project.repoTestCommands).toBeUndefined();
     } finally { removeDir(m.base); }
+  });
+  it("a ticket run is light only when it runs the project's own testCommands.ticket: a repository's command (usually the full suite) takes the heavy slot", async () => {
+    const seen: { command: string; heavy: boolean }[] = [];
+    const project = { name: 'abc-website', createdAt: 'x', testCommand: 'npm test', testCommands: { ticket: 'npm run test:ticket' }, repoTestCommands: { 'abc-be': 'mvn -q test' } };
+    const c = new Container<Services>();
+    const shared = { testQueue: { run: async (j: { command: string; heavy: boolean }) => { seen.push({ command: j.command, heavy: j.heavy }); return { ok: true, code: 0, tail: '' }; } } };
+    c.provide('env', () => ({ o: { projectRoot: folder() }, shared }) as unknown as Env);
+    c.provide('store', () => ({ project }) as unknown as Services['store']);
+    c.provide('projectName', () => 'abc-website');
+    registerTests(c);
+    const run = async (moment: 'ticket' | 'merge' | 'release', repo?: string): Promise<void> => {
+      const command = c.get('testCommandAt')(moment)('C:/wt', repo)!;
+      await c.get('testRunnerAt')(moment)({ cwd: 'C:/wt', command, timeoutMs: 1000 });
+    };
+    await run('ticket', 'abc-be');
+    await run('ticket', 'abc-fe');
+    await run('merge', 'abc-fe');
+    await run('release');
+    expect(seen).toEqual([
+      { command: 'mvn -q test', heavy: true }, // the repository's own command, though testCommands.ticket is set
+      { command: 'npm run test:ticket', heavy: false }, // the project's fast ticket command, as before
+      { command: 'npm test', heavy: true }, // merge and release are always heavy
+      { command: 'npm test', heavy: true },
+    ]);
   });
   it('a project folder that is the repository lists no repositories and refuses any repository command', async () => {
     const s = await bootServer();

@@ -19,9 +19,9 @@ export function registerTests(c: ProjectContainer): void {
     return (moment: TestMoment) => (cwd?: string, repo?: string): string | undefined => testCommandFor(moment, { project: () => store.project, detected: detectedTestCommand }, cwd, repo);
   });
   /**
-   * The test runs go through the machine's queue. A run is heavy (it takes the queue's one slot) unless it is a `ticket` run with its own
-   * command: a project that defines `testCommands.ticket` says that command is the fast, pointed one. `merge`, `release` and the central
-   * run are always heavy; a ticket that falls back to the full `testCommand` is heavy too.
+   * The test runs go through the machine's queue. A run is heavy (it takes the queue's one slot) unless it is a `ticket` run of the
+   * project's own `testCommands.ticket`: a project that defines it says that command is the fast, pointed one. `merge`, `release` and the
+   * central run are always heavy; a ticket run of anything else (the full `testCommand`, a repository's own command) is heavy too.
    */
   c.provide('testRunnerAt', (k) => {
     const { shared } = k.get('env');
@@ -29,7 +29,7 @@ export function registerTests(c: ProjectContainer): void {
     const projectName = k.get('projectName');
     return (moment: TestMoment): TestRunner => (r) => shared.testQueue.run({
       cwd: r.cwd, command: r.command, timeoutMs: r.timeoutMs,
-      heavy: moment !== 'ticket' || !store.project.testCommands?.ticket?.trim(),
+      heavy: moment !== 'ticket' || r.command.trim() !== store.project.testCommands?.ticket?.trim(),
       label: `${moment}:${r.owner ?? projectName}`,
       ...(r.owner !== undefined ? { owner: r.owner } : {}),
       ...(r.watchOwner && r.owner !== undefined ? { ownerAlive: () => k.get('registry').get(r.owner!)?.state !== 'finished' && k.get('ptys').status(r.owner!) === 'running' } : {}),
