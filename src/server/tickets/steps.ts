@@ -6,7 +6,7 @@ import { pushBranch } from '../git/push';
 import { findMarkers } from '../requests/markers';
 import { boundedWait } from './bounded-wait';
 import { validateChecklist, type ChecklistError, type Step } from './checklist';
-import type { TicketStore } from './store';
+import type { AgentTests, TicketStore } from './store';
 import { runDirect, type TicketTestDeps } from './test-queue';
 import { KeyedQueue } from '../keyed-queue';
 import { noTestCommandDetail } from '../test-commands';
@@ -22,6 +22,8 @@ export type StepResult =
 
 /** The bounded wait ended before the step did: the work goes on, ask again with the same step number. */
 export type StepRunning = { status: 'running'; n: number; /** The step waits for the machine's test queue: the place of its run (1 = next). */ queue?: number };
+/** What `step_done` carries; `tests` is what the agent says it ran by hand (kept on the ticket, never checked). */
+export interface StepInput { n: number; note?: string; skip?: boolean; tests?: AgentTests }
 interface StepJob { n: number; waiters: number; promise: Promise<StepResult> }
 
 export type ChecklistSetResult =
@@ -93,9 +95,9 @@ export class StepService {
    * depend on this call, and when the wait ends first the answer is `running`; asking again joins the job, and a closed step nobody
    * was waiting for is kept for the next call (a refusal is worked out again). Without `waitMs` it waits for the end, as before.
    */
-  stepDone(slug: string, o: { n: number; note?: string; skip?: boolean }): Promise<StepResult>;
-  stepDone(slug: string, o: { n: number; note?: string; skip?: boolean }, opts: { waitMs?: number }): Promise<StepResult | StepRunning>;
-  async stepDone(slug: string, o: { n: number; note?: string; skip?: boolean }, opts: { waitMs?: number } = {}): Promise<StepResult | StepRunning> {
+  stepDone(slug: string, o: StepInput): Promise<StepResult>;
+  stepDone(slug: string, o: StepInput, opts: { waitMs?: number }): Promise<StepResult | StepRunning>;
+  async stepDone(slug: string, o: StepInput, opts: { waitMs?: number } = {}): Promise<StepResult | StepRunning> {
     const kept = this.unclaimed.get(slug);
     if (kept) {
       this.unclaimed.delete(slug);
@@ -172,7 +174,7 @@ export class StepService {
     });
   }
 
-  private async close(slug: string, o: { n: number; note?: string; skip?: boolean }): Promise<StepResult> {
+  private async close(slug: string, o: StepInput): Promise<StepResult> {
     const wt = this.d.worktreeOf(slug);
     if (!wt) return refuse('no_worktree', { detail: 'this agent has no worktree' });
     const ticket = this.d.tickets.get(slug);
@@ -182,6 +184,8 @@ export class StepService {
     const next = ticket.steps.find((s) => !s.done && !s.waitingOn);
     if (!next || next.n !== o.n) return refuse('out_of_order', { detail: next ? `the next open step is ${next.n}` : 'every step is closed' });
 
+    // The agent's own test run is kept even when this step is refused later (a failed validation, a missing note): it did run them.
+    if (o.tests) this.d.tickets.setAgentTests(slug, o.tests);
     const total = ticket.steps.length;
     const note = (o.note ?? '').trim();
     const isValidation = o.n === total - 1;

@@ -12,6 +12,9 @@ export interface ReviewNote { severity: string; where?: string; text: string }
 export interface Verdict { round: number; pass: boolean; reviewer: string; notes: ReviewNote[]; at: string }
 export interface TestResult { ok: boolean; command: string; tail: string; sha: string; at: string }
 
+/** What the agent said about the tests it ran itself (`step_done`): a claim, never checked by the console. */
+export interface AgentTests { command: string; result: 'passed' | 'failed'; summary?: string }
+
 export interface Ticket {
   slug: string;
   steps: Step[];
@@ -26,6 +29,8 @@ export interface Ticket {
   verdicts: Verdict[];
   /** The console's own test run on the delivered commit. */
   tests?: TestResult;
+  /** The last tests the agent reported running by hand (an unverified claim; shown apart from `tests`). */
+  agentTests?: AgentTests;
   deliveredSha?: string;
   mergedSha?: string;
   reviewer?: string;
@@ -125,6 +130,10 @@ export class TicketStore {
 
   setTests(slug: string, tests: TestResult): Ticket {
     return this.save({ ...this.existing(slug), tests });
+  }
+
+  setAgentTests(slug: string, agentTests: AgentTests): Ticket {
+    return this.save({ ...this.existing(slug), agentTests });
   }
 
   /** Closes the next open step that is not waiting for an answer. Anything else is refused, so a repeated or out-of-order `step_done` cannot double-commit. */

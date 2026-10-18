@@ -405,6 +405,22 @@ it('step_done, checklist_set and report_blocked send only their own fields and r
   await find('tool.call', 'mcp__console-mod__report_blocked')(f.$, { reason: 'stuck', extra: 1 });
   expect(bodies.report_blocked).toEqual({ reason: 'stuck' });
 });
+it('step_done forwards the tests the agent ran, and only the fields the console knows', async () => {
+  const { find } = await loadMod();
+  const bodies: Record<string, unknown> = {};
+  const f = fake$({
+    env: { CONSOLE_ROLE: 'agent', CONSOLE_AGENT: 'fix-login' },
+    fetch: (url, init) => {
+      if (url.includes('/v1/tools/')) { bodies[url.split('/').pop()!] = JSON.parse(init.body ?? '{}'); return { ok: true, text: JSON.stringify({ status: 'closed', n: 4 }) }; }
+      return { ok: true, text: '{}' };
+    },
+  });
+  await find('session.start')(f.$, {}, next);
+  await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 4, tests: { command: 'npm test', result: 'passed', summary: '358 ok', extra: 1 } });
+  expect(bodies.step_done).toEqual({ n: 4, tests: { command: 'npm test', result: 'passed', summary: '358 ok' } });
+  await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 4, tests: 'passed' });
+  expect(bodies.step_done).toEqual({ n: 4, tests: 'passed' });
+});
 it('step_done keeps asking while the console says "running" and returns the final answer', async () => {
   const { find } = await loadMod();
   let n = 0;

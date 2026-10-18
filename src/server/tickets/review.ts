@@ -170,7 +170,7 @@ export class ReviewService {
     const docsNote = ticket.steps.length > 0 ? ticket.steps[ticket.steps.length - 1]!.note : undefined;
     const { lang, t } = this.d.language();
     const report = buildReport({
-      slug, project: this.d.project, branch: wt.branch, goal: ticket.goal, steps: ticket.steps, files, tests, testsInhibited: inhibited, docsNote,
+      slug, project: this.d.project, branch: wt.branch, goal: ticket.goal, steps: ticket.steps, files, tests, testsInhibited: inhibited, agentTests: ticket.agentTests, docsNote,
       verdicts: ticket.verdicts, lang, t, generatedAt: new Date().toISOString(),
     });
     const reportFile = writeReport(this.d.root, slug, report);

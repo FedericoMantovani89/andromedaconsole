@@ -1,5 +1,7 @@
 import type { Context } from '../../http';
 import { badRequest } from '../../tool-errors';
+import { parseAgentTests } from '../../tickets/agent-tests';
+import type { AgentTests } from '../../tickets/store';
 import type { ProjectContainer } from '../services';
 
 /**
@@ -27,8 +29,14 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
     step_done: async (slug, body) => {
       const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
       if (typeof b.n !== 'number' || !Number.isInteger(b.n)) return badRequest('n must be the whole number of the step');
+      let tests: AgentTests | undefined;
+      if (b.tests !== undefined && b.tests !== null) {
+        const parsed = parseAgentTests(b.tests);
+        if (!parsed.ok) return badRequest(parsed.detail);
+        tests = parsed.tests;
+      }
       return steps.stepDone(slug, {
-        n: b.n, note: typeof b.note === 'string' ? b.note : undefined, skip: b.skip === true,
+        n: b.n, note: typeof b.note === 'string' ? b.note : undefined, skip: b.skip === true, ...(tests ? { tests } : {}),
       }, { waitMs: TOOL_WAIT_MS });
     },
     report_blocked: async (slug, body) => {

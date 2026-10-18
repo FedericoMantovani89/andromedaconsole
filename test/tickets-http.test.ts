@@ -50,6 +50,7 @@ it('malformed bodies come back as bad_request, not as a crash', async () => {
   expect((await tool(s, 'fix-login', 'checklist_set', { items: 'nope' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   expect((await tool(s, 'fix-login', 'step_done', { n: '1' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
   expect((await tool(s, 'fix-login', 'step_done', { n: 1.5 })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
+  expect((await tool(s, 'fix-login', 'step_done', { n: 1, tests: { command: 'npm test', result: 'green' } })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.stringContaining('tests.result') });
   expect((await tool(s, 'fix-login', 'report_blocked', { reason: '   ' })).body).toEqual({ status: 'error', code: 'bad_request', detail: expect.any(String) });
 });
 it('a rejected checklist says why; a good one is stored and shows as progress in the state', async () => {

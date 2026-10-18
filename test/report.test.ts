@@ -72,6 +72,33 @@ describe('buildReport', () => {
     expect(text).toMatch(/## Tests\n\nn\/a/);
     expect(text).toMatch(/## Files touched\n\nn\/a/);
   });
+  it('what the agent says about its own test run is its own line, labelled, next to the console\'s (tests switched off)', () => {
+    const text = buildReport(base({ tests: undefined, testsInhibited: true, agentTests: { command: 'npm test', result: 'passed', summary: '358 tests ok' } }));
+    expect(text).toContain('Not run: the tests are switched off for this project.');
+    expect(text).toContain('Reported by the agent, not verified by the console: passed (`npm test`) - 358 tests ok');
+    expect(text.indexOf('Not run:')).toBeLessThan(text.indexOf('Reported by the agent'));
+  });
+  it('an agent failure is shown as failed; with the console\'s own run both are there', () => {
+    const text = buildReport(base({ agentTests: { command: 'npm run lint', result: 'failed' } }));
+    expect(text).toContain('Reported by the agent, not verified by the console: failed (`npm run lint`)');
+    expect(text).toContain('Result: passed (on commit abcdef1)');
+  });
+  it('without an agent report the agent line is n/a, never passed', () => {
+    const text = buildReport(base({ tests: undefined, testsInhibited: true }));
+    expect(text).toContain('Reported by the agent, not verified by the console: n/a');
+    expect(text).not.toMatch(/Reported by the agent[^\n]*passed/);
+  });
+  it('the agent\'s command and summary are one plain line: no backticks, no new line, no heading', () => {
+    const text = buildReport(base({ agentTests: { command: 'npm `test`', result: 'passed', summary: 'ok\n## Fake heading\n- [x] done' } }));
+    expect(text.split('\n').filter((l) => l.startsWith('## Fake'))).toEqual([]);
+    expect(text).toContain('passed (`npm test`) - ok ## Fake heading - [x] done');
+  });
+  it('the agent line follows the language', () => {
+    const text = buildReport(base({ lang: 'it', t: translator('it'), agentTests: { command: 'npm test', result: 'passed' } }));
+    expect(text).toContain('Dichiarato dall\'agente, non verificato dalla console: superati (`npm test`)');
+    expect(text).not.toContain('Reported by the agent');
+    expect(buildReport(base({ lang: 'it', t: translator('it') }))).toContain('Dichiarato dall\'agente, non verificato dalla console: n/d');
+  });
   it('step notes are kept verbatim, in the language the agent wrote, under decisions and doubts', () => {
     const text = buildReport(base({ steps: [{ n: 1, title: 'Study', done: true, note: 'Ho trovato il problema nel mapper.\nDubbio: il caso SPEDITO.' }] }));
     expect(text).toContain('> Ho trovato il problema nel mapper.\n> Dubbio: il caso SPEDITO.');

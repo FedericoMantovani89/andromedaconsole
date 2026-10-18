@@ -2,7 +2,7 @@ import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Translate } from '../../shared/i18n';
 import type { Step } from './checklist';
-import type { TestResult, Verdict } from './store';
+import type { AgentTests, TestResult, Verdict } from './store';
 import { SLUG_RE } from '../../shared/slug';
 
 export interface ChangedFile { path: string; /** null for a binary file */ added: number | null; removed: number | null }
@@ -18,6 +18,8 @@ export interface ReportInput {
   tests?: TestResult;
   /** The user switched the tests off for this project: "no run" is then said as such, not as "n/a". */
   testsInhibited?: boolean;
+  /** The tests the agent says it ran by hand (`step_done`): shown on a line of their own, labelled as not verified by the console. */
+  agentTests?: AgentTests;
   /** The note of the documentation step, when it was closed with a note instead of a change. */
   docsNote?: string;
   verdicts: Verdict[];
@@ -64,7 +66,7 @@ const cut = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 
 
 /**
  * `report.md` (SPEC 15.6), written by the console without a model. Headings follow the language; everything an agent wrote is
- * quoted verbatim in its own block, and nothing here comes from an agent's claim about tests or files: those are the console's.
+ * quoted verbatim in its own block, and the tests and files are the console's, except one clearly labelled line with what the agent says it ran by hand.
  */
 export function buildReport(i: ReportInput): string {
   const { t } = i;
@@ -97,6 +99,14 @@ export function buildReport(i: ReportInput): string {
     out.push(`${t('report.tests.command')}: \`${i.tests.command}\``);
     out.push(`${t('report.tests.result')}: ${i.tests.ok ? t('report.tests.passed') : t('report.tests.failed')} (${t('report.tests.commit', { sha: i.tests.sha.slice(0, 7) })})`);
     if (!i.tests.ok && i.tests.tail.trim() !== '') out.push('', '````', i.tests.tail.trim().replace(/````/g, "'''"), '````');
+  }
+  // The agent's own claim, apart from the console's run and labelled as unverified. Its text is data: one plain line, no backticks.
+  const label = t('report.tests.agent');
+  if (!i.agentTests) out.push('', `${label}: ${na}`);
+  else {
+    const a = i.agentTests;
+    const summary = a.summary ? oneLine(a.summary) : '';
+    out.push('', `${label}: ${a.result === 'passed' ? t('report.tests.passed') : t('report.tests.failed')} (\`${oneLine(a.command).replace(/`/g, '')}\`)${summary !== '' ? ` - ${summary}` : ''}`);
   }
   out.push('');
 

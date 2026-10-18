@@ -181,6 +181,16 @@ const TOOL_SPECS = {
         n: { type: 'integer', description: 'Step number, in order' },
         note: { type: 'string', description: 'What you found or did (required for step 1 and for a skipped step)' },
         skip: { type: 'boolean', description: 'Skip the step; needs a note of at least 20 characters' },
+        tests: {
+          type: 'object',
+          description: 'Tests you ran yourself, so the report can say so (the console shows it as your claim, not verified). Last one wins.',
+          properties: {
+            command: { type: 'string', description: 'The command you ran, one line, at most 500 characters' },
+            result: { type: 'string', enum: ['passed', 'failed'] },
+            summary: { type: 'string', description: 'Optional: counts or the first failure, at most 500 characters' },
+          },
+          required: ['command', 'result'],
+        },
       },
       required: ['n'],
     },
@@ -406,12 +416,18 @@ async function askConsole(/** @type {Engine} */ $, /** @type {string} */ questio
   }
 }
 
+/** The `tests` of a step_done: only its three fields; anything else is passed on as it is for the console to refuse with a reason. */
+function pickTests(/** @type {any} */ t) {
+  if (typeof t !== 'object' || t === null || Array.isArray(t)) return t;
+  return { command: t.command, result: t.result, summary: t.summary };
+}
+
 /** What each console tool sends: only the fields the console knows, never the whole event. */
 function toolBody(/** @type {string} */ name, /** @type {Ev} */ e) {
   if (name === 'spawn_agent') return { name: e.name, profile: e.profile, goal: e.goal, model: e.model, repo: e.repo };
   if (name === 'send_message') return { to: e.to, type: e.type, text: e.text, in_reply_to: e.in_reply_to, step: typeof e.step === 'string' ? Number(e.step) : e.step, because: e.because };
   if (name === 'checklist_set') return { items: e.items };
-  if (name === 'step_done') return { n: typeof e.n === 'string' ? Number(e.n) : e.n, note: e.note, skip: e.skip };
+  if (name === 'step_done') return { n: typeof e.n === 'string' ? Number(e.n) : e.n, note: e.note, skip: e.skip, tests: pickTests(e.tests) };
   if (name === 'report_blocked') return { reason: e.reason };
   if (name === 'ticket_report') return { name: e.name, rerun: e.rerun };
   if (name === 'request_review') return { name: e.name, model: e.model };
