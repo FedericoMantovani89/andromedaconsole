@@ -12,7 +12,7 @@ change that introduces the behaviour.
 - Tests: a pending release confirmation is pinned to raise one desktop notice titled "Release to approve" (the queue badge and notice already existed).
 - Fixed: a release request that is no longer in the queue is asked again instead of answering "already asked".
 - Added: a release can be approved or rejected from the Claude app: the main shows the request in its own AskUserQuestion dialog and the mod posts the user's choice with a per-session release key the model never sees.
-- Added: guard rule `path.console-config`: no session (main or agent) may write Claude Code's `.claude/settings*.json` files or the console mod's folder.
+- Added: guard rule `path.console-config`: no session (main or agent) may write Claude Code's `.claude/settings.json` / `settings.local.json` (judged as Windows resolves the path: cd, junctions, 8.3 names) or the console mod's folder, nor replace, move or remove the `.claude` folder or a folder holding it.
 
 ## [0.0.10] - 2026-10-15
 
