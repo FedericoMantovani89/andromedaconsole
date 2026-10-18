@@ -52,6 +52,8 @@ export interface CentralDeps {
   command(cwd?: string, repo?: string): string | undefined;
   /** The command a merge runs after merging in `cwd`: when it is the release command, the last merge already tested the tip. */
   mergeCommand?(cwd?: string, repo?: string): string | undefined;
+  /** The user inhibited the project's tests: there is nothing to run, so no repository is locked or read. */
+  testsDisabled?(): boolean;
   timeoutMs(): number;
   /** How long after a merge the run waits for the next one (the quiet time that makes a batch). */
   settleMs: number;
@@ -138,6 +140,7 @@ export class CentralRun {
   }
 
   private async once(): Promise<void> {
+    if (this.d.testsDisabled?.() === true) return;
     const groups = new Map<string, CentralTicket[]>();
     for (const t of this.d.tickets.list()) {
       if (t.status !== 'merged' || t.central?.checkedTip) continue;

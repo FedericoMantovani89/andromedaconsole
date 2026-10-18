@@ -44,6 +44,6 @@ export function testCommandFor(
 /** The detail of a `no_test_command` refusal, for the agent to pass on: with a repository it names it and the option that sets its command. */
 export function noTestCommandDetail(repo: string | undefined): string {
   return repo
-    ? `no test command was set for the repository ${repo} or for the project, and none was detected in ${repo} (no pom.xml, build.gradle or package.json test script): ask the main to set one in the console options (Options, Project, "test command of the repository ${repo}")`
+    ? `no test command was set for the repository ${repo} or for the project, and none was detected in ${repo} (no build file with a test command): ask the main to set one in the console options (Options, Project, "test command of the repository ${repo}")`
     : 'the project has no test command: ask the main to set it in the console options';
 }

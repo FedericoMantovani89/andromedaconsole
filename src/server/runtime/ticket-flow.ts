@@ -72,6 +72,7 @@ export function registerTicketFlow(c: ProjectContainer): void {
       root: o.projectRoot, project: projectName, tickets, report: stateProblems.add,
       command: testCommandAt('release'),
       mergeCommand: testCommandAt('merge'),
+      testsDisabled: k.get('testsDisabled'),
       timeoutMs: () => runtime.git.testTimeoutMinutes * 60_000,
       settleMs: CENTRAL_SETTLE_MS,
       merging: () => k.get('merge').inFlight(),

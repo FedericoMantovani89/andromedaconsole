@@ -98,6 +98,16 @@ describe('CentralRun', () => {
     expect(r.c.record('')).toBeUndefined();
   });
 
+  it('with the tests inhibited it neither takes the project lock nor reads a repository\'s tip', async () => {
+    const r = rig({ tickets: [merged('a', 'sa'), merged('b', 'sb', { repo: 'abc-be' })] });
+    const touched: string[] = [];
+    const git: CentralGit = { ...r.deps.git, lock: async (rel, fn) => { touched.push(`lock:${rel}`); return fn(); }, prepare: async (rel) => { touched.push(`prepare:${rel}`); return { path: 'P', tip: 'tip1' }; } };
+    const c = new CentralRun({ ...r.deps, git, testsDisabled: () => true });
+    await c.runNow();
+    expect(touched).toEqual([]);
+    expect(r.runs).toHaveLength(0);
+  });
+
   it("asks for the command of the repository's project worktree, so a folder of several repositories finds each one's own", async () => {
     const r = rig({ tickets: [merged('a', 'sa')] });
     const asked: (string | undefined)[] = [];

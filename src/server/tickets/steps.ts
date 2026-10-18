@@ -90,8 +90,8 @@ export class StepService {
 
   /**
    * Closes a step. With `waitMs` the call is bounded: the work (the validation can last tens of minutes) runs as a job that does not
-   * depend on this call, and when the wait ends first the answer is `running`; asking again joins the job, and a result nobody was
-   * waiting for is kept for the next call. Without `waitMs` it waits for the end, as before.
+   * depend on this call, and when the wait ends first the answer is `running`; asking again joins the job, and a closed step nobody
+   * was waiting for is kept for the next call (a refusal is worked out again). Without `waitMs` it waits for the end, as before.
    */
   stepDone(slug: string, o: { n: number; note?: string; skip?: boolean }): Promise<StepResult>;
   stepDone(slug: string, o: { n: number; note?: string; skip?: boolean }, opts: { waitMs?: number }): Promise<StepResult | StepRunning>;
@@ -125,9 +125,13 @@ export class StepService {
     }
   }
 
+  /**
+   * Only a closed step nobody waited for is kept for the next call: it cannot be done again. A refusal is not kept, because its cause
+   * may be gone by the next call (the user switched the tests off, or set a test command), and that call works it out afresh.
+   */
   private finishJob(slug: string, job: StepJob, result: StepResult): StepResult {
     if (this.jobs.get(slug) === job) this.jobs.delete(slug);
-    if (job.waiters === 0) this.unclaimed.set(slug, { n: job.n, result });
+    if (job.waiters === 0 && result.status === 'closed') this.unclaimed.set(slug, { n: job.n, result });
     return result;
   }
 
