@@ -29,7 +29,10 @@ export interface TestJob {
   ownerAlive?: () => boolean;
   /** Called with the position (1 = next) each time it changes while the run waits. */
   onWait?: (position: number) => void;
-  /** Asked when the run's turn comes: true and the command does not run, the run answers `notRun` (a run can wait for minutes). */
+  /**
+   * Asked when the run's turn comes and at each poll: true and a waiting run leaves the queue answering `notRun` (a run can wait for
+   * minutes), a running one is stopped (`cancelled`).
+   */
   skip?: () => boolean;
 }
 
@@ -117,7 +120,7 @@ export class TestQueue {
     if (slot) { this.pump(); this.stopWatching(); }
   }
 
-  /** Polls the owners while anything waits or runs: a dead owner must not keep the machine's only slot. */
+  /** Polls the owners and the `skip` of each run while anything waits or runs: a dead owner or an unwanted run must not keep its place or the slot. */
   private watch(): void {
     if (this.timer) return;
     this.timer = setInterval(() => this.sweep(), this.pollMs);
@@ -133,12 +136,14 @@ export class TestQueue {
 
   private sweep(): void {
     const gone = (e: Entry): boolean => { try { return e.job.ownerAlive?.() === false; } catch { return false; } };
+    // A run its caller no longer wants (the tests were inhibited meanwhile) leaves the queue at once, not when its turn comes.
     for (const e of [...this.waiting]) {
-      if (!gone(e)) continue;
+      const skip = skipNow(e.job.skip);
+      if (!skip && !gone(e)) continue;
       this.waiting.splice(this.waiting.indexOf(e), 1);
-      e.resolve({ ok: false, code: null, tail: '', cancelled: true });
+      e.resolve(skip ? { ...NOT_RUN } : { ok: false, code: null, tail: '', cancelled: true });
     }
-    for (const e of this.running) if (gone(e)) e.ctl.abort();
+    for (const e of this.running) if (gone(e) || skipNow(e.job.skip)) e.ctl.abort();
     this.pump();
     this.stopWatching();
   }

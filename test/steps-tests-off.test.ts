@@ -108,7 +108,7 @@ function busyTestQueue(verdict: TestRun): { freeSlot(): void; endSuite(): void }
   let endSuite!: () => void;
   const slot = new Promise<void>((r) => { freeSlot = r; });
   const suite = new Promise<void>((r) => { endSuite = r; });
-  const machine = new TestQueue({ run: async (o) => {
+  const machine = new TestQueue({ pollMs: 20, run: async (o) => {
     if (o.command === 'other-project') { await slot; return { ok: true, code: 0, tail: '' }; }
     runs += 1;
     await suite;
@@ -128,6 +128,17 @@ it('the tests switched off while the validation waits in the test queue: it neve
   q.freeSlot();
   expect(await svc.stepDone('a', { n: 4 }, { waitMs: 15_000 })).toMatchObject({ status: 'closed', n: 4 });
   expect(runs).toBe(0);
+});
+
+it('the tests switched off while the validation waits behind a long run: it is answered at the next poll, without waiting for the slot', async () => {
+  store.setTestCommand('full-suite');
+  const q = busyTestQueue({ ok: false, code: 1, tail: 'red' });
+  expect(await svc.stepDone('a', { n: 4 }, { waitMs: 100 })).toMatchObject({ status: 'running', n: 4 });
+  store.setTestsDisabled(true);
+  expect(await svc.stepDone('a', { n: 4 }, { waitMs: 5_000 })).toMatchObject({ status: 'closed', n: 4 }); // the slot is still held
+  expect(runs).toBe(0);
+  q.freeSlot();
+  q.endSuite();
 });
 
 it('the tests switched off while the suite runs: its failure is not reported and the step closes', async () => {

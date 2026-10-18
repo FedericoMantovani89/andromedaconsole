@@ -156,4 +156,40 @@ describe('TestQueue', () => {
     f.end('b');
     await b;
   });
+
+  it('a waiting job whose skip turns true is answered "not run" at the next poll and frees its place', async () => {
+    const f = fakeRunner();
+    let skip = false;
+    const q = new TestQueue({ run: f.run, pollMs: 5 });
+    void q.run(job('long'));
+    const skipped = q.run(job('v', { owner: 'a', skip: () => skip }));
+    const c = q.run(job('c', { owner: 'c' }));
+    await tick();
+    expect(q.position('c')).toBe(2);
+    skip = true;
+    expect(await skipped).toMatchObject({ ok: false, notRun: true });
+    expect(q.position('a')).toBeUndefined();
+    expect(q.position('c')).toBe(1);
+    f.end('long');
+    await tick();
+    expect(f.started).toEqual(['long', 'c']); // v never ran
+    f.end('c');
+    await c;
+  });
+
+  it('a running job whose skip turns true is stopped and passes the slot on', async () => {
+    const f = fakeRunner();
+    let skip = false;
+    const q = new TestQueue({ run: f.run, pollMs: 5 });
+    const a = q.run(job('a', { skip: () => skip }));
+    const b = q.run(job('b'));
+    await tick();
+    skip = true;
+    expect((await a).cancelled).toBe(true);
+    expect(f.aborted).toEqual(['a']);
+    await tick();
+    expect(f.started).toEqual(['a', 'b']);
+    f.end('b');
+    await b;
+  });
 });

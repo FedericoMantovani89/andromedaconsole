@@ -224,8 +224,8 @@ export class StepService {
     if (isValidation && this.d.testsDisabled?.() !== true) {
       const command = this.d.testCommand(wt.worktree, ticket.repo)?.trim();
       if (!command) return refuse('no_test_command', { detail: noTestCommandDetail(ticket.repo) });
-      // The run can wait in the machine's queue for minutes: the user may inhibit the tests meanwhile. Then it does not start, or its
-      // verdict is dropped, and the step closes as it does with the tests inhibited (nothing is reported as passed or failed).
+      // The run can wait in the machine's queue for minutes: the user may inhibit the tests meanwhile. Then the queue drops it at its
+      // next poll (or stops it if it runs) and any verdict is ignored, and the step closes as it does with the tests inhibited (nothing is reported as passed or failed).
       const inhibited = (): boolean => this.d.testsDisabled?.() === true;
       const v = await (this.d.runTests ?? runDirect)({ cwd: wt.worktree, command, timeoutMs: this.d.testTimeoutMs(), owner: slug, watchOwner: true, skip: inhibited });
       if (!v.ok && !v.notRun && !inhibited()) return refuse('validation_failed', { tail: v.tail, ...(v.timedOut ? { timedOut: true, detail: 'the test command timed out and was stopped' } : v.cancelled ? { detail: 'the test run was cancelled' } : { detail: `the test command exited with code ${v.code}` }) });
