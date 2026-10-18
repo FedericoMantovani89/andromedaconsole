@@ -7,9 +7,19 @@ import { join, relative } from 'node:path';
 import { expect, it } from 'vitest';
 
 const SRC = join(__dirname, '..', 'src');
-/** What names the user's Claude home in code (comments are stripped first). */
-const CLAUDE_HOME = /\bhomedir\b|CLAUDE_CONFIG_DIR|\.claude\.json|~[\\/]\.claude/;
-const WRITE_API = /\b(writeFile|writeFileSync|appendFile|appendFileSync|rename|renameSync|rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync|mkdir|mkdirSync|copyFile|copyFileSync|createWriteStream|cp|cpSync)\s*\(/;
+/**
+ * Whether code names the user's Claude home (comments are stripped first): `CLAUDE_CONFIG_DIR`, `.claude.json`, a `~/.claude` path, or
+ * `homedir` together with a `.claude` string. `homedir` alone is not enough: config.ts uses it as the APPDATA fallback for the console's
+ * OWN configuration folder, which it writes on purpose.
+ */
+const namesClaudeHome = (c: string): boolean =>
+  /CLAUDE_CONFIG_DIR|\.claude\.json|~[\\/]\.claude/.test(c) || (/\bhomedir\b/.test(c) && /['"`](?:[^'"`\n]*[\\/])?\.claude\b[^'"`\n]*['"`]/.test(c)); // a string that is or holds a `.claude` path part (not `raw.claude`)
+/** Node's write calls, and the repo's own helpers that write files (src/server/fs-atomic.ts and the savers built on it). */
+const WRITE_API = new RegExp('\\b(' + [
+  'writeFile', 'writeFileSync', 'writeSync', 'appendFile', 'appendFileSync', 'rename', 'renameSync', 'rm', 'rmSync', 'rmdir', 'rmdirSync',
+  'unlink', 'unlinkSync', 'mkdir', 'mkdirSync', 'copyFile', 'copyFileSync', 'createWriteStream', 'cp', 'cpSync',
+  'writeJsonAtomic', 'saveConfigAtomic', 'saveTemplate', 'saveUserProfile', 'writeGroqKey', 'writeReport', '\\w+Atomic',
+].join('|') + ')\\s*\\(');
 const TRANSCRIPTS = /\b(defaultProjectsDir|projectsDir)\b/;
 
 function sources(dir: string): string[] {
@@ -22,7 +32,7 @@ const stripComments = (code: string): string => code.replace(/\/\*[\s\S]*?\*\//g
 function globalClaudeWrites(code: string): string[] {
   const c = stripComments(code);
   const problems: string[] = [];
-  if (CLAUDE_HOME.test(c)) for (const line of c.split('\n')) if (WRITE_API.test(line)) problems.push(`names the Claude home and writes: ${line.trim()}`);
+  if (namesClaudeHome(c)) for (const line of c.split('\n')) if (WRITE_API.test(line)) problems.push(`names the Claude home and writes: ${line.trim()}`);
   for (const line of c.split('\n')) if (TRANSCRIPTS.test(line) && WRITE_API.test(line)) problems.push(`writes to the transcripts folder: ${line.trim()}`);
   return problems;
 }
@@ -38,4 +48,8 @@ it('the check catches a write under the Claude home, and leaves reads and commen
   expect(globalClaudeWrites("rmSync(join(defaultProjectsDir(), 'a'));")).toHaveLength(1);
   expect(globalClaudeWrites("const p = join(homedir(), '.claude', 'projects');\nconst t = readFileSync(p, 'utf8');")).toEqual([]);
   expect(globalClaudeWrites("// default ~/.claude/projects\nwriteFileSync(join(stateDir, 'x'), 'y');")).toEqual([]);
+  // the repo's own write helpers count as writes; homedir alone (the console's own config folder) does not name the Claude home
+  expect(globalClaudeWrites("import { homedir } from 'node:os';\nwriteJsonAtomic(join(homedir(), '.claude', 'settings.json'), {});")).toHaveLength(1);
+  expect(globalClaudeWrites("const p = join(homedir(), '.claude.json');\nsaveConfigAtomic(p, c);")).toHaveLength(1);
+  expect(globalClaudeWrites("const base = process.env.APPDATA ?? homedir();\nwriteJsonAtomic(join(base, 'andromeda', 'config.json'), c);")).toEqual([]);
 });
