@@ -122,7 +122,9 @@ it('after is a last resort: without a reason of 20 to 500 characters it is refus
   expect(ticketFile(t, 'be-api').afterReason).toBe(REASON); // trimmed
   await commitFirstStep(s, t, 'be-api', 'api.js');
   await deliverRest(s, t, 'be-api');
-  expect((await tool(s, 'shop-api', 'ticket_report', { name: 'be-api' })).body.facts).toMatchObject({ after: { name: 'dba-schema' }, afterReason: REASON });
+  const report = (await tool(s, 'shop-api', 'ticket_report', { name: 'be-api' })).body;
+  expect(report.facts).toMatchObject({ after: { name: 'dba-schema' }, afterReason: REASON });
+  expect(report.report).toContain(`Started after the agent dba-schema, on top of its work. Why: ${REASON}`); // the user reads it in report.md
 });
 
 it('after an agent of another repository is after_other_repo', async () => {
@@ -248,8 +250,12 @@ it('a real overlap of a dependent ticket with another merged ticket still goes t
   await commitFirstStep(s, t, 'dba-schema', 'migration.sql');
   await spawn(s, 'be-api', { after: 'dba-schema' });
   await spawn(s, 'fe-page');
+  // the same new files with other content, one of them with a name that is not plain ASCII
+  for (const slug of ['be-api', 'fe-page']) writeFileSync(join(worktreePathFor(t.repo, slug), 'café.txt'), `${slug}\n`);
   await commitFirstStep(s, t, 'be-api', 'api.js');
-  await commitFirstStep(s, t, 'fe-page', 'api.js'); // the same new file with other content
+  await commitFirstStep(s, t, 'fe-page', 'api.js');
+  // the other agent changes its file after the dependent one started
+  writeFileSync(join(worktreePathFor(t.repo, 'dba-schema'), 'migration.sql'), 'dba-schema v2\n');
   for (const slug of ['be-api', 'fe-page', 'dba-schema']) await deliverRest(s, t, slug);
   for (const slug of ['dba-schema', 'fe-page']) {
     await approve(s, slug);
@@ -257,10 +263,20 @@ it('a real overlap of a dependent ticket with another merged ticket still goes t
   }
   await approve(s, 'be-api');
   const before = gitSync(t.repo, 'rev-parse', 'project/shop-api');
-  expect((await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: 'be-api' })).body).toEqual({ status: 'conflict', files: ['api.js'] });
+  const r = await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: 'be-api' });
+  expect(r.body.status).toBe('conflict');
+  expect([...r.body.files].sort()).toEqual(['api.js', 'café.txt']);
   expect(gitSync(t.repo, 'rev-parse', 'project/shop-api')).toBe(before);
   expect(gitSync(projectWorktree(t.repo), 'status', '--porcelain')).toBe('');
   expect(ticketFile(t, 'be-api')).toMatchObject({ status: 'in_progress', round: 1 });
+  // the author's folder: only the files it really shares are in conflict; the other agent's file is the project's version
+  const b = worktreePathFor(t.repo, 'be-api');
+  expect(readFileSync(join(b, 'migration.sql'), 'utf8')).toBe('dba-schema v2\n');
+  expect(gitSync(b, '-c', 'core.quotePath=false', 'diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean).sort()).toEqual(['api.js', 'café.txt']);
+  const told = (await mod(s, 'be-api', '/v1/inbox')).body.messages.map((m: { text: string }) => m.text).join('\n');
+  expect(told).toContain('- api.js');
+  expect(told).toContain('- café.txt');
+  expect(told).not.toContain('- migration.sql');
 });
 
 it('when the other agent is replaced, the dependent ticket follows the new name: refused while it is not merged, through once it is', async () => {

@@ -20,6 +20,8 @@ export interface ReportInput {
   testsInhibited?: boolean;
   /** The tests the agent says it ran by hand (`step_done`): shown on a line of their own, labelled as not verified by the console. */
   agentTests?: AgentTests;
+  /** The agent this ticket was started after (`spawn_agent after`) and the main's reason: shown to the user, under the objective. */
+  after?: { name: string; reason?: string };
   /** The note of the documentation step, when it was closed with a note instead of a change. */
   docsNote?: string;
   verdicts: Verdict[];
@@ -77,6 +79,8 @@ export function buildReport(i: ReportInput): string {
   out.push('---', '', `# ${plain(i.slug)}`, '');
 
   out.push(`## ${t('report.objective')}`, '', i.goal?.trim() ? quote(i.goal.trim()) : na, '');
+  // A dependency is a last resort: the user sees which agent and why. The reason is the main's text: one plain line, no backticks.
+  if (i.after) out.push(t('report.after', { name: plain(i.after.name), reason: i.after.reason?.trim() ? oneLine(i.after.reason).replace(/`/g, '') : na }), '');
 
   const done = i.steps.filter((s) => s.done).length;
   out.push(`## ${t('report.checklist', { done, total: i.steps.length })}`, '');

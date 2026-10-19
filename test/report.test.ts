@@ -88,6 +88,19 @@ describe('buildReport', () => {
     expect(text).toContain('Reported by the agent, not verified by the console: n/a');
     expect(text).not.toMatch(/Reported by the agent[^\n]*passed/);
   });
+  it('a ticket started after another agent says so under the objective, with the reason as one plain line, in both languages', () => {
+    const after = { name: 'dba-schema', reason: 'the API tests need\nthe real `migration`\n## Fake heading' };
+    const en = buildReport(base({ after }));
+    expect(en).toContain('Started after the agent dba-schema, on top of its work. Why: the API tests need the real migration ## Fake heading');
+    expect(en.split('\n').filter((l) => l.startsWith('## Fake'))).toEqual([]);
+    expect(en.indexOf('Started after')).toBeGreaterThan(en.indexOf('## Objective'));
+    expect(en.indexOf('Started after')).toBeLessThan(en.indexOf('## Checklist'));
+    const itText = buildReport(base({ lang: 'it', t: translator('it'), after }));
+    expect(itText).toContain('Avviato dopo l\'agente dba-schema, sopra il suo lavoro. Perché: the API tests need the real migration ## Fake heading');
+    expect(itText).not.toContain('Started after');
+    // no line without a dependency
+    expect(buildReport(base())).not.toContain('Started after');
+  });
   it('the agent\'s command and summary are one plain line: no backticks, no new line, no heading', () => {
     const text = buildReport(base({ agentTests: { command: 'npm `test`', result: 'passed', summary: 'ok\n## Fake heading\n- [x] done' } }));
     expect(text.split('\n').filter((l) => l.startsWith('## Fake'))).toEqual([]);

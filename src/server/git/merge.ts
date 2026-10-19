@@ -136,9 +136,14 @@ export async function mergeIntoProject(o: { wt: string; sha: string; message: st
  * memory: on a conflict nothing in the worktree has changed. A clean result is checked out (`read-tree -m -u`) and committed.
  */
 async function squashFromBase(o: { wt: string; sha: string; message: string; base: string; prev: string }): Promise<MergeOutcome> {
-  const tree = await git(o.wt, ['merge-tree', '--write-tree', '--name-only', '--no-messages', `--merge-base=${o.base}`, o.prev, o.sha]);
-  const lines = tree.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  // -z: names come raw, NUL-separated (without it git quotes a name that is not plain ASCII).
+  const tree = await git(o.wt, ['merge-tree', '--write-tree', '-z', '--name-only', '--no-messages', `--merge-base=${o.base}`, o.prev, o.sha]);
+  const lines = nulList(tree.stdout);
   if (tree.code === 1 && lines.length > 1) return { ok: false, kind: 'conflict', files: [...new Set(lines.slice(1))] };
+  if (tree.code === 129 || /unknown option|usage: git merge-tree/i.test(tree.stderr)) {
+    const said = tree.stderr.trim().split(/\r?\n/)[0] ?? '';
+    return { ok: false, kind: 'failed', detail: `merging a ticket started after another one needs git 2.40 or later (git merge-tree --merge-base); this git refused it: ${said}` };
+  }
   if (tree.code !== 0 || !/^[0-9a-f]{40,64}$/.test(lines[0] ?? '')) return { ok: false, kind: 'failed', detail: `${tree.stderr}\n${tree.stdout}`.trim() };
   const undo = async (): Promise<void> => { await git(o.wt, ['reset', '--hard', '-q', o.prev]); await git(o.wt, ['clean', '-fdq']); };
   const read = await git(o.wt, ['read-tree', '-m', '-u', o.prev, lines[0]!]);
@@ -162,5 +167,33 @@ export async function resetTo(wt: string, sha: string): Promise<void> {
  */
 export async function startMergeForAuthor(cwd: string, projectBranch: string): Promise<string[]> {
   await git(cwd, ['merge', '--no-ff', '--no-commit', projectBranch]);
-  return (await git(cwd, ['diff', '--name-only', '--diff-filter=U'])).stdout.split(/\r?\n/).filter(Boolean);
+  return unmergedIn(cwd);
+}
+
+/** The files of a worktree that are in conflict (unmerged), raw names. */
+export async function unmergedIn(cwd: string): Promise<string[]> {
+  return nulList((await git(cwd, ['diff', '--name-only', '-z', '--diff-filter=U'])).stdout);
+}
+
+/** A `-z` list: NUL-separated names (a stray line break around an entry, as some git versions add, is dropped). */
+function nulList(out: string): string[] {
+  return [...new Set(out.split('\0').map((l) => l.replace(/^[\r\n]+|[\r\n]+$/g, '')).filter(Boolean))];
+}
+
+/**
+ * The author side of a conflict for a ticket started after another one (`spawn_agent after`). The author's merge of the project branch
+ * has the ordinary merge base, which predates the other agent's squash merge, so the other agent's files (changed again after this
+ * branch started) conflict or come back stale. Every path this ticket did not change itself (`base..delivered`) is set to the project
+ * branch's version (or removed when the project branch has none): only the files the ticket really shares with others stay in
+ * conflict. Returns the files still unmerged.
+ */
+export async function keepProjectOutsideOwnWork(o: { cwd: string; projectBranch: string; base: string; delivered: string; unmerged: string[] }): Promise<string[]> {
+  const own = new Set(nulList((await git(o.cwd, ['diff', '--name-only', '-z', '--no-renames', o.base, o.delivered])).stdout));
+  const differing = nulList((await git(o.cwd, ['diff', '--name-only', '-z', '--no-renames', o.projectBranch])).stdout);
+  for (const path of new Set([...o.unmerged, ...differing])) {
+    if (own.has(path)) continue;
+    const onProject = (await git(o.cwd, ['cat-file', '-e', `${o.projectBranch}:${path}`])).code === 0;
+    await git(o.cwd, onProject ? ['--literal-pathspecs', 'checkout', o.projectBranch, '--', path] : ['--literal-pathspecs', 'rm', '-q', '-f', '--', path]);
+  }
+  return unmergedIn(o.cwd);
 }

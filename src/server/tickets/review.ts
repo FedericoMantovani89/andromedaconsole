@@ -187,6 +187,7 @@ export class ReviewService {
     const report = buildReport({
       slug, project: this.d.project, branch: wt.branch, goal: ticket.goal, steps: ticket.steps, files, tests, testsInhibited: inhibited, agentTests: ticket.agentTests, docsNote,
       verdicts: ticket.verdicts, lang, t, generatedAt: new Date().toISOString(),
+      ...(ticket.after !== undefined ? { after: { name: ticket.after, ...(ticket.afterReason ? { reason: ticket.afterReason } : {}) } } : {}),
     });
     const reportFile = writeReport(this.d.root, slug, report);
     const after = await afterState(this.d, ticket); // the same answer the gate gives

@@ -5,7 +5,7 @@ import type { Translate } from '../../shared/i18n';
 import type { AgentGit } from '../agents/registry';
 import { git } from '../git/git';
 import { worktreesDirFor } from '../git/worktree';
-import { changedFiles, ensureProjectWorktree, mergeIntoProject, resetTo, startMergeForAuthor, withProjectLock } from '../git/merge';
+import { changedFiles, ensureProjectWorktree, keepProjectOutsideOwnWork, mergeIntoProject, resetTo, startMergeForAuthor, withProjectLock } from '../git/merge';
 import { commonDir, removeWorktree } from '../git/worktree';
 import { afterGate, ownWorkBase, type AfterRefusal } from './after-gate';
 import { boundedWait } from './bounded-wait';
@@ -178,7 +178,7 @@ export class MergeService {
     });
     const merged = await mergeIntoProject({ wt: project.path, sha: ticket.deliveredSha, message, squash: this.d.squash(), ...(base !== undefined ? { base } : {}) });
     if (!merged.ok) {
-      if (merged.kind === 'conflict') return await this.conflict(slug, merged.files, author.worktree);
+      if (merged.kind === 'conflict') return await this.conflict(slug, merged.files, author.worktree, base !== undefined ? { base, delivered: ticket.deliveredSha } : undefined);
       return { status: 'refused', code: 'git_failed', detail: merged.detail };
     }
 
@@ -210,7 +210,7 @@ export class MergeService {
     return r.code === 0 && /^[0-9a-f]{40}$/.test(sha) ? sha : undefined;
   }
 
-  private async conflict(slug: string, files: string[], authorWorktree: string): Promise<MergeResult> {
+  private async conflict(slug: string, files: string[], authorWorktree: string, own?: { base: string; delivered: string }): Promise<MergeResult> {
     this.d.tickets.move(slug, 'conflict');
     if (!this.d.authorAlive(slug)) {
       this.d.tickets.move(slug, 'needs_user');
@@ -219,11 +219,16 @@ export class MergeService {
       return { status: 'conflict', files };
     }
     // The console puts the author's folder in the conflict state; the author edits the files and closes its steps.
-    await startMergeForAuthor(authorWorktree, `project/${this.d.project}`);
+    const projectBranch = `project/${this.d.project}`;
+    const unmerged = await startMergeForAuthor(authorWorktree, projectBranch);
+    // A ticket started after another one: the files it never touched take the project branch's version, so the author edits only the
+    // files it really shares with other work (never the other agent's files, nor a stale copy of them).
+    const left = own ? await keepProjectOutsideOwnWork({ cwd: authorWorktree, projectBranch, ...own, unmerged }) : unmerged;
+    const named = left.length > 0 ? left : files;
     const reopened = this.d.tickets.reopen(slug, { firstStep: 'Resolve merge conflicts' });
     this.d.notifyAuthor(slug, [
       `Message from the main about your ticket "${slug}": it is approved, but it conflicts with work already merged into the project branch, in:`,
-      ...files.map((f) => `- ${f}`),
+      ...named.map((f) => `- ${f}`),
       'The console has started the merge in your folder: the conflict markers (<<<<<<<, =======, >>>>>>>) are in those files. Edit them so that both sides\' intent is kept, then close the steps in order with step_done.',
       `Your checklist has three new steps ("Resolve merge conflicts (round ${reopened.round})", "Validation (round ${reopened.round})", "Update documentation (round ${reopened.round})"). The console will deliver the branch again and it will be reviewed again.`,
     ].join('\n'));
