@@ -4,9 +4,10 @@ import { afterEach, it, expect } from 'vitest';
 import { autoClose, bootServer, mod, modEvent, modToolUntilEnd, ui, until, state, type Running } from './helpers';
 import { makeRepo, removeDir, worktreePathFor, type TestRepo } from './git-helpers';
 
-autoClose();
 const repos: TestRepo[] = [];
+// Registered before autoClose: afterEach hooks run last-in first-out, so the servers (and their agents) are closed before the folders go.
 afterEach(() => { while (repos.length) removeDir(repos.pop()!.base); });
+autoClose();
 
 const spawn = (s: Awaited<ReturnType<typeof bootServer>>, name: string, goal: string) =>
   mod(s, 'shop-api', '/v1/tools/spawn_agent', 'POST', { name, profile: 'developer', goal });

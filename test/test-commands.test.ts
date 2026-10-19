@@ -160,9 +160,11 @@ describe("a repository's own test command (repoTestCommands, keyed by the reposi
   });
   it('PUT /api/project sets and clears a repository command, the state lists the repositories with what each detects, and an unknown one is refused', async () => {
     const m = makeMultiRepo(['abc-fe', 'abc-be']);
+    let toClose: Awaited<ReturnType<typeof bootServer>> | undefined;
     try {
       writeFileSync(join(m.repos['abc-fe']!.repo, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
       const s = await bootServer({ projectRoot: m.root });
+      toClose = s;
       const put = (body: unknown) => ui(s, '/api/project', 'PUT', body);
       const before = (await state(s)).project;
       expect(before.repos).toEqual(['abc-be', 'abc-fe']);
@@ -184,7 +186,7 @@ describe("a repository's own test command (repoTestCommands, keyed by the reposi
       expect((await state(s)).project.testCommand).toBeUndefined(); // neither the refused nor the dry run wrote
       expect((await put({ repoTestCommands: { 'abc-be': '' } })).body).toEqual({});
       expect((await state(s)).project.repoTestCommands).toBeUndefined();
-    } finally { removeDir(m.base); }
+    } finally { await toClose?.close(); removeDir(m.base); } // the folder is removed after the server is closed: an open file keeps it on Windows
   });
   it("a ticket run is light only when it runs the project's own testCommands.ticket: a repository's command (usually the full suite) takes the heavy slot", async () => {
     const seen: { command: string; heavy: boolean }[] = [];
