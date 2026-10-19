@@ -271,6 +271,17 @@ export class RequestService {
       .map((r) => ({ id: r.id, from: r.from, to: r.to, state: r.state as 'open' | 'escalated', text: r.text.slice(0, 300) }));
   }
 
+  /**
+   * The live requests of one session for `list_agents`: the ones it holds (addressed to it, or escalated to the main) and the ones it
+   * asked that nobody has settled. Undefined when there is none.
+   */
+  liveFor(slug: string): { holding: { id: string; from: string; state: 'open' | 'escalated' }[]; asked: { id: string; to: string; state: 'open' | 'escalated' }[] } | undefined {
+    const live = this.d.store.list().filter((r) => r.state === 'open' || r.state === 'escalated').sort((x, y) => x.createdAt - y.createdAt);
+    const holding = live.filter((r) => this.handlerOf(r.id) === slug).map((r) => ({ id: r.id, from: r.from, state: r.state as 'open' | 'escalated' }));
+    const asked = live.filter((r) => r.from === slug).map((r) => ({ id: r.id, to: this.handlerOf(r.id) ?? r.to, state: r.state as 'open' | 'escalated' }));
+    return holding.length + asked.length > 0 ? { holding, asked } : undefined;
+  }
+
   get(id: string): RequestRecord | undefined { return this.d.store.get(id); }
 
   /** The open requests addressed to `slug`: what it still owes an answer to. */

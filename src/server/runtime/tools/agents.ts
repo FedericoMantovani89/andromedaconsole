@@ -41,6 +41,10 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
           ...(() => { const t = a.role === 'agent' ? ticketStatusOf(a.slug) : undefined; return t && t !== 'in_progress' ? { ticket: t } : {}; })(),
           // The agent it was started after: the main knows this ticket waits for that one to be merged.
           ...(a.role === 'agent' ? afterOf(a.slug) : {}),
+          // Out of the agents column (it ended for good, or the user archived it): the main does not count it as work in hand.
+          ...(a.archived ? { archived: true } : {}),
+          // Open requests with this session on either side: who is waiting for whom, so a stuck one is seen and chased.
+          ...(() => { const r = requests.liveFor(a.slug); return r ? { requests: r } : {}; })(),
         })),
         ...(held.length > 0 ? { requests: held } : {}),
         ...(pendingRelease ? { release: { id: pendingRelease.id, status: 'pending' as const } } : {}),

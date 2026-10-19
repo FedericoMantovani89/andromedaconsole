@@ -272,6 +272,28 @@ describe('LoopDetector no_step', () => {
 });
 
 describe('LoopDetector silence', () => {
+  it('names the command still running when the silence fires', () => {
+    const { d, clock } = make();
+    const c = bash('npm run build:all');
+    d.feed('a', [c]);
+    d.onModEvent('a');
+    clock.t += 7 * MIN;
+    const r = d.tick(['a']);
+    expect(r[0]?.finding.evidence).toContain('no event from the agent for 5 minutes');
+    expect(r[0]?.finding.evidence).toContain('Bash: npm run build:all');
+    expect(r[0]?.finding.evidence).toContain('running for 7 minutes');
+  });
+
+  it('a finished call is not reported as running', () => {
+    const { d, clock } = make();
+    const c = bash('npm run build:all');
+    d.feed('a', [c, ok((c as { id: string }).id)]);
+    d.onModEvent('a');
+    clock.t += 5 * MIN;
+    expect(d.tick(['a'])[0]?.finding.evidence).not.toContain('Bash');
+    expect(d.runningTool('a')).toBeUndefined();
+  });
+
   it('fires a warning once after 5 minutes without a mod event', () => {
     const { d, clock } = make();
     d.onModEvent('a');

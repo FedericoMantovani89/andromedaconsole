@@ -90,3 +90,19 @@ it('the main sees the open release request; an agent does not; it goes away once
   expect((await ui(s, `/api/queue/${asked.id}/answer`, 'POST', { answer: 'reject' })).status).toBe(200);
   expect((await listBody(s, 'shop-api')).release).toBeUndefined();
 }, 120_000);
+
+it('shows each agent the requests it is holding or waiting on, with id, state and the other side', async () => {
+  const s = await bootServer();
+  s.setLimits({ global: 9, perProject: 9 });
+  await spawn(s, 'be-orders', 'orders API'); await spawn(s, 'fe-pages', 'order pages');
+  const q = await mod(s, 'fe-pages', '/v1/tools/send_message', 'POST', { type: 'question', to: 'be-orders', text: 'REST signatures of POST /orders?' });
+  const id = q.body.requestId as string;
+  const agents = await list(s, 'shop-api');
+  const be = agents.find((a: any) => a.slug === 'be-orders');
+  const fe = agents.find((a: any) => a.slug === 'fe-pages');
+  expect(be.requests).toEqual({ holding: [{ id, from: 'fe-pages', state: 'open' }], asked: [] });
+  expect(fe.requests).toEqual({ holding: [], asked: [{ id, to: 'be-orders', state: 'open' }] });
+  expect(agents.find((a: any) => a.slug === 'shop-api').requests).toBeUndefined();
+  await mod(s, 'be-orders', '/v1/tools/send_message', 'POST', { type: 'answer', in_reply_to: id, text: 'POST /orders {sku, qty} -> 201 {id}' });
+  expect((await list(s, 'shop-api')).find((a: any) => a.slug === 'be-orders').requests).toBeUndefined();
+});

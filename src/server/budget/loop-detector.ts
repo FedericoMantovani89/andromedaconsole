@@ -26,6 +26,8 @@ interface SlugState {
   errors: Map<string, number>;
   /** toolUseId -> full call key, the last MAX_CALLS calls (insertion order). */
   calls: Map<string, string>;
+  /** Calls whose result has not arrived yet (toolUseId -> what and since when); the silence message names the oldest. */
+  running: Map<string, { name: string; input: Record<string, unknown>; at: number }>;
   compacts: number;
   lastStepAt: number;
   lastEventAt: number;
@@ -57,7 +59,7 @@ export class LoopDetector {
     let s = this.slugs.get(slug);
     if (!s) {
       const t = this.now();
-      s = { runKey: undefined, runLen: 0, errors: new Map(), calls: new Map(), compacts: 0, lastStepAt: t, lastEventAt: t, fired: new Set() };
+      s = { runKey: undefined, runLen: 0, errors: new Map(), calls: new Map(), running: new Map(), compacts: 0, lastStepAt: t, lastEventAt: t, fired: new Set() };
       this.slugs.set(slug, s);
     }
     return s;
@@ -73,6 +75,11 @@ export class LoopDetector {
       if (e.kind === 'tool_use') {
         const key = fullKey(e.name, e.input);
         s.calls.set(e.id, key);
+        s.running.set(e.id, { name: e.name, input: e.input, at: this.now() });
+        if (s.running.size > MAX_CALLS) {
+          const first = s.running.keys().next();
+          if (!first.done) s.running.delete(first.value);
+        }
         if (s.calls.size > MAX_CALLS) {
           const oldest = s.calls.keys().next();
           if (!oldest.done) s.calls.delete(oldest.value);
@@ -86,6 +93,7 @@ export class LoopDetector {
           });
         }
       } else if (e.kind === 'tool_result') {
+        s.running.delete(e.toolUseId);
         // An error repeated anywhere since the last step counts, also with successful calls in between (edit, test fails the same
         // way, edit, test fails the same way...).
         if (!e.isError) continue;
@@ -135,10 +143,22 @@ export class LoopDetector {
       }
       if (t - s.lastEventAt >= cfg.silenceMinutes * MINUTE && !s.fired.has('silence')) {
         s.fired.add('silence');
-        out.push({ slug, finding: { signal: 'silence', warnOnly: true, evidence: `no event from the agent for ${cfg.silenceMinutes} minutes` } });
+        const running = this.runningTool(slug);
+        out.push({ slug, finding: { signal: 'silence', warnOnly: true, evidence: `no event from the agent for ${cfg.silenceMinutes} minutes${running ? `; still running ${running}` : ''}` } });
       }
     }
     return out;
+  }
+
+  /** The oldest call still waiting for its result, as "Bash: npm test (running for 7 minutes)"; undefined when none is. */
+  runningTool(slug: string): string | undefined {
+    const s = this.slugs.get(slug);
+    const first = s?.running.values().next();
+    if (!first || first.done) return undefined;
+    const { name, input, at } = first.value;
+    const detail = typeof input.command === 'string' ? input.command : typeof input.file_path === 'string' ? input.file_path : typeof input.description === 'string' ? input.description : '';
+    const minutes = Math.floor((this.now() - at) / MINUTE);
+    return `${name}${detail ? `: ${detail.replace(/\s+/g, ' ').slice(0, 120)}` : ''} (running for ${minutes} minute${minutes === 1 ? '' : 's'})`;
   }
 
   /** Whole minutes without any sign of life, once the silence threshold is reached; undefined before (the panel chip, SPEC 32.2). */
