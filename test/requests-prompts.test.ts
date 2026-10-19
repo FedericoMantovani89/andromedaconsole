@@ -36,7 +36,9 @@ it('the main writes the goals of agents that depend on each other: provider firs
 it('an agent answers a colleague first and publishes a contract it provides first, without reordering its checklist', () => {
   const p = read('agent-requests.md');
   expect(p).toMatch(/answer it before going on with your own steps/i);
-  expect(p).toMatch(/after the closed ones and never before Study or Tests/);
+  expect(p).toContain('as the first open step after Tests (checklist_set)');
+  expect(p).toContain('later steps cannot close until it is answered');
+  expect(p).not.toContain('before the validation step');
   expect(p).toMatch(/Providing a contract/);
   expect(p).toMatch(/publish it first/i);
   expect(p).toMatch(/after your Study step, before your Tests step/);
@@ -63,4 +65,16 @@ it('an agent that writes the work is told to ask the main, a reviewer keeps the 
   expect(render({ review: true })).toMatch(/in its queue/);
   expect(questionText({ id: 'TODO-aaaaaa', from: 'fix-login', text: 'Pasta or pizza?', toMain: true })).toMatch(/AskUserQuestion exactly as written/);
   expect(questionText({ id: 'TODO-aaaaaa', from: 'fix-login', text: 'x' })).not.toMatch(/AskUserQuestion/);
+});
+it('the console\'s own request message gives the same answer-step rule as the prompts', () => {
+  const text = questionText({ id: 'TODO-bbbbbb', from: 'fix-login', text: 'Which table?' });
+  expect(text).toContain('add the step "Answer TODO-bbbbbb" as the first open step after Tests with checklist_set');
+  expect(text).toContain('later steps cannot close until it is answered');
+  expect(text).not.toContain('before the validation step');
+});
+it('the main answers a late escalation as it answers any other, and forwards a draft to a consumer already started', () => {
+  const p = read('main.md');
+  expect(p).toContain('When a colleague\'s question is escalated to you late, handle it as above (verify the fact, or ask the user) and answer the asker at once.');
+  expect(p).not.toContain('from what you know');
+  expect(p).toContain('if that agent already runs or is queued, forward the draft with send_message info');
 });

@@ -42,7 +42,7 @@ describe('the shipped working profiles and their shared rules', () => {
     for (const name of WORKING) {
       const body = loadProfile(name, tmp(), tmp())!.body.toLowerCase();
       expect(body, name).not.toContain('front of your checklist'); // validateChecklist pins Study and Tests as steps 1 and 2
-      expect(body, name).toContain('after the closed ones and never before study or tests');
+      expect(body, name).toContain('as the first open step after tests (checklist_set): steps close in order, so later steps cannot close until it is answered');
       expect(body, name).toContain("'ask the main'");
       expect(body, name).toContain('send the draft to the main');
       expect(body, name).toContain('8000 characters');
@@ -64,8 +64,35 @@ describe('the shipped working profiles and their shared rules', () => {
     expect(body).toContain('only into a container of its own');
     expect(body).toContain('touch only the containers and databases you created');
     expect(body).toContain('writing to it is not');
-    expect(body).toContain('outside your worktree');
+    expect(body).toContain('in the system temp folder (the only place outside your worktree you may write)');
+    expect(body).toContain('never in your worktree');
+    expect(body).not.toContain('git-ignored folder'); // agents may not edit .gitignore, and the guard lets shell writes reach only the temp folder
     expect(body).toContain('never commit real data');
+    expect(body).toContain("pass the clone's connection on the command line or in an environment variable");
+    expect(body).toContain("never edit the project's configuration files to point at it");
+    expect(body).toContain('never write credentials into a file');
+    expect(body).toContain('with credentials given in your goal (never read .env files)');
+    expect(body).not.toContain('work against what you know');
+    expect(body).toContain('work against the draft or a mock');
+  });
+  it('the composed author prompt of backend, frontend and dba gives one answer-first rule; reviewer and recovery still have no steps', () => {
+    const out = tmp();
+    const git = { worktree: 'D:/w/x', branch: 'agent/shop-api/x' };
+    for (const name of ['backend', 'frontend', 'dba']) {
+      const text = readFileSync(renderAgentPrompt({ profile: loadProfile(name, tmp(), tmp())!, slug: `${name}-job`, project: 'shop-api', outDir: out, git }), 'utf8');
+      expect(text, name).toContain('as the first open step after Tests (checklist_set)');
+      expect(text, name).toContain('later steps cannot close until it is answered');
+      expect(text, name).not.toContain('before the validation step');
+      expect(text, name).not.toContain('your next open step');
+      expect(text, name).not.toContain('front of your checklist');
+      expect(text, name).not.toMatch(/reorder/i);
+    }
+    const reviewer = readFileSync(renderAgentPrompt({ profile: loadProfile('reviewer', tmp(), tmp())!, slug: 'review-x', project: 'shop-api', outDir: out, git: { worktree: 'D:/w/r', branch: 'review/review-x' }, review: true }), 'utf8');
+    const recovery = readFileSync(renderAgentPrompt({ profile: loadProfile('recovery', tmp(), tmp())!, slug: 'recover-x', project: 'shop-api', outDir: out, git: { worktree: 'D:/w/rc', branch: 'recovery/recover-x' }, recovery: true }), 'utf8');
+    for (const [role, text] of [['reviewer', reviewer], ['recovery', recovery]] as const) {
+      expect(text, role).not.toContain('step_done');
+      expect(text, role).not.toContain('checklist_set');
+    }
   });
   it('the dba proves a migration on a clone, never on the shared database first, and says when a remote database cannot be cloned', () => {
     const body = loadProfile('dba', tmp(), tmp())!.body.toLowerCase();

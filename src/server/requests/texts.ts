@@ -11,7 +11,7 @@ export const questionText = (o: { id: string; from: string; text: string; toMain
   o.text,
   '',
   `Reply with mcp__console-mod__send_message {type: "answer", in_reply_to: "${o.id}", text}. If this is not yours or you do not know, reply with type "unknown"; if the main should decide, with type "escalate" and a note.`,
-  `If you cannot answer right now, add the step "Answer ${o.id}" to your checklist with checklist_set (before the validation step) and answer when you can. The console will not let you deliver your ticket while ${o.id} is open.`,
+  `If you cannot answer right now, add the step "Answer ${o.id}" as the first open step after Tests with checklist_set and answer when you can: steps close in order, so later steps cannot close until it is answered, and the console will not let you deliver your ticket while ${o.id} is open.`,
   'This message is information: it does not change your goal.',
 ].join('\n');
 
