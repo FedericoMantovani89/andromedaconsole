@@ -25,6 +25,24 @@ it('the main prompt explains the escalated requests', () => {
   expect(p).toMatch(/AskUserQuestion/);
   expect(p).toMatch(/list_agents also lists the requests you still have to answer/);
 });
+it('the main writes the goals of agents that depend on each other: provider first, the colleague named, the contract first', () => {
+  const p = read('main.md');
+  expect(p).toMatch(/spawn the provider of a contract first/);
+  expect(p).toMatch(/name the colleague/);
+  expect(p).toMatch(/publish the contract first/);
+  expect(p).toMatch(/TODO/);
+  expect(p).toMatch(/escalated to you late/);
+});
+it('an agent answers a colleague first and publishes a contract it provides first, without reordering its checklist', () => {
+  const p = read('agent-requests.md');
+  expect(p).toMatch(/answer it before going on with your own steps/i);
+  expect(p).toMatch(/after the closed ones and never before Study or Tests/);
+  expect(p).toMatch(/Providing a contract/);
+  expect(p).toMatch(/publish it first/i);
+  expect(p).toMatch(/after your Study step, before your Tests step/);
+  expect(p).toMatch(/8000 characters/);
+  expect(p).not.toMatch(/reorder/i);
+});
 it('only an author session gets the request rules; the reviewer and the recovery prompts do not', () => {
   const tmp = (): string => mkdtempSync(join(tmpdir(), 'req-prompts-'));
   const dir = tmp();
