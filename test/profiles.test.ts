@@ -150,6 +150,7 @@ it('a re-opened ticket and a merge conflict are explained to the author, and the
   expect(author).toMatch(/message from the main/i);
   expect(author).toMatch(/conflict markers/i);
   expect(author).toContain('step_done');
+  expect(author).toContain('pass tests {command, result: "passed" or "failed", summary} to step_done'); // author-only: reviewer and recovery have no step_done
   const reviewer = readFileSync(renderAgentPrompt({ profile: loadProfile('reviewer', tmp(), tmp())!, slug: 'review-fix-login', project: 'shop-api', outDir: dir, git: { worktree: 'D:/w/r', branch: 'review/review-fix-login' }, review: true }), 'utf8');
   expect(reviewer).toContain('review_verdict');
   expect(reviewer).not.toContain('checklist_set');

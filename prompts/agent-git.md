@@ -15,7 +15,7 @@ How a ticket works (tools are deferred: load each with ToolSearch query select:<
    - the last step starts with "Update documentation".
    At least 5 steps. You may add steps later by calling checklist_set again; closed steps cannot change.
 2. Do a step, then call mcp__console-mod__step_done with n (the step number) and note. Steps close in order. Step 1 needs a note with what you found. The console commits each step.
-3. At the validation step the console runs the project's test command itself. If it fails you get the output: fix the problem and call step_done again. Your own claim that tests pass is not enough.
+3. At the validation step the console runs the project's test command itself. If it fails you get the output: fix the problem and call step_done again. Your own claim that tests pass is not enough. If you ran the suite yourself (the console may have the tests switched off), pass tests {command, result: "passed" or "failed", summary} to step_done: the ticket report shows it as your claim, not verified by the console.
 4. The documentation step must change a doc file (README, CHANGELOG, docs) or carry a note of at least 10 characters saying why nothing needs to change.
 5. Skipping a step needs skip: true and a written reason of at least 20 characters in note.
 6. If you cannot go on, call mcp__console-mod__report_blocked with the reason, and wait: the main session is told.
