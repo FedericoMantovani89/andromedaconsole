@@ -229,7 +229,9 @@ export class MergeService {
     this.d.notifyAuthor(slug, [
       `Message from the main about your ticket "${slug}": it is approved, but it conflicts with work already merged into the project branch, in:`,
       ...named.map((f) => `- ${f}`),
-      'The console has started the merge in your folder: the conflict markers (<<<<<<<, =======, >>>>>>>) are in those files. Edit them so that both sides\' intent is kept, then close the steps in order with step_done.',
+      left.length > 0
+        ? 'The console has started the merge in your folder: the conflict markers (<<<<<<<, =======, >>>>>>>) are in those files. Edit them so that both sides\' intent is kept, then close the steps in order with step_done.'
+        : 'The console has started the merge in your folder and kept the project branch\'s version of what is not yours, but no conflict markers remain in those files: open them, check that both sides\' intent is kept, then close the steps in order with step_done.',
       `Your checklist has three new steps ("Resolve merge conflicts (round ${reopened.round})", "Validation (round ${reopened.round})", "Update documentation (round ${reopened.round})"). The console will deliver the branch again and it will be reviewed again.`,
     ].join('\n'));
     this.d.notifyMain(`Ticket "${slug}" conflicts with the project branch in ${files.join(', ')}: sent back to its author to resolve (rework ${reopened.round}). The project branch is unchanged.`);

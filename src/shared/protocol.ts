@@ -4,9 +4,6 @@ import type { RequestRow, RequestsInfo } from './requests';
 import type { UpdateState } from './update';
 import type { NotificationsConfig, ToastStatus } from './notify';
 
-export const PROFILES = ['developer', 'backend', 'frontend', 'dba', 'reviewer', 'recovery'] as const;
-export type Profile = (typeof PROFILES)[number];
-
 /** Error codes the user can act on: each one needs an `error.<code>` text in every language (checked at build). */
 export const USER_ERROR_CODES = [
   'slug.missing', 'slug.format', 'slug.length', 'slug.generic', 'slug.reserved', 'slug.duplicate',

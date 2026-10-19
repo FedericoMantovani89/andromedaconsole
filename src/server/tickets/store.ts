@@ -259,10 +259,18 @@ export class TicketStore {
     const target = this.file(to);
     if (existsSync(target)) throw new Error('ticket.exists');
     renameSync(this.file(from), target); // the file moves first (one atomic rename), then the slug inside it follows
-    const moved = this.save({ ...t, slug: to });
-    // A ticket started after the old name now waits for the new one: the dependency follows the work, not the name.
-    for (const d of this.list()) if (d.after === from) this.save({ ...d, after: to });
-    return moved;
+    const done: Ticket[] = [];
+    try {
+      const moved = this.save({ ...t, slug: to });
+      // A ticket started after the old name now waits for the new one: the dependency follows the work, not the name.
+      for (const d of this.list()) if (d.after === from) { this.save({ ...d, after: to }); done.push(d); }
+      return moved;
+    } catch (e) {
+      // Not half done: the dependents already rewritten and the file go back to the old name, then the error goes on.
+      for (const d of done) { try { this.save(d); } catch { /* best effort: the next load reports it */ } }
+      try { renameSync(target, this.file(from)); this.save(t); } catch { /* best effort */ }
+      throw e;
+    }
   }
 
   progress(slug: string): TicketProgress | undefined {

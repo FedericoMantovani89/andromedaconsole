@@ -190,10 +190,13 @@ function nulList(out: string): string[] {
 export async function keepProjectOutsideOwnWork(o: { cwd: string; projectBranch: string; base: string; delivered: string; unmerged: string[] }): Promise<string[]> {
   const own = new Set(nulList((await git(o.cwd, ['diff', '--name-only', '-z', '--no-renames', o.base, o.delivered])).stdout));
   const differing = nulList((await git(o.cwd, ['diff', '--name-only', '-z', '--no-renames', o.projectBranch])).stdout);
+  const failed: string[] = [];
   for (const path of new Set([...o.unmerged, ...differing])) {
     if (own.has(path)) continue;
     const onProject = (await git(o.cwd, ['cat-file', '-e', `${o.projectBranch}:${path}`])).code === 0;
-    await git(o.cwd, onProject ? ['--literal-pathspecs', 'checkout', o.projectBranch, '--', path] : ['--literal-pathspecs', 'rm', '-q', '-f', '--', path]);
+    const args = onProject ? ['--literal-pathspecs', 'checkout', o.projectBranch, '--', path] : ['--literal-pathspecs', 'rm', '-q', '-f', '--', path];
+    // Git is flaky under load on Windows: one retry, and a path that still fails stays in the list instead of being left stale unnoticed.
+    if ((await git(o.cwd, args)).code !== 0 && (await git(o.cwd, args)).code !== 0) failed.push(path);
   }
-  return unmergedIn(o.cwd);
+  return [...new Set([...(await unmergedIn(o.cwd)), ...failed])];
 }
