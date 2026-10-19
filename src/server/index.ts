@@ -151,6 +151,7 @@ async function createProjectRuntime(shared: Shared, p: { projectRoot: string; pr
   boot(c, BOOT_BEFORE_PREPARE);
   for (const rel of c.get('repos')()) await c.get('prepareRepo')(repoPathOf(o.projectRoot, rel));
   boot(c, BOOT_AFTER_PREPARE);
+  await c.get('ctx').tryCheckouts.refresh(); // what git has registered: the try checkouts outlive a restart of the console
   wire(c);
   return {
     ctx: c.get('ctx'), name: c.get('projectName'), root: o.projectRoot,

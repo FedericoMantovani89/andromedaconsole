@@ -4,6 +4,8 @@ import type { Context } from '../http';
 import { ModelCatalog } from '../catalog/models';
 import { PluginCatalog } from '../catalog/plugins';
 import { GuardLog } from '../guard/log';
+import { repoPathOf } from '../git/repos';
+import { TryCheckoutService } from '../git/try-checkout';
 import { NullNotifier, ToastNotifier, type Notifier } from '../notify/notifier';
 import { Presence } from '../notify/presence';
 import { NotificationService, realNotifyClock, type NotifyClock } from '../notify/service';
@@ -113,6 +115,7 @@ export function registerHttpContext(c: ProjectContainer): void {
       testMode: process.env.CONSOLE_TEST === '1',
       configPath,
       repos, forgetRepos, prepareRepo,
+      tryCheckouts: new TryCheckoutService({ projectRoot: o.projectRoot, project: projectName, repos: () => repos().map((name) => ({ name, path: repoPathOf(o.projectRoot, name) })) }),
       getPrereq: () => shared.getPrereq(),
       getHelperUse: () => shared.helperUsage.state(),
       ensurePrereq: () => shared.ensurePrereq(),

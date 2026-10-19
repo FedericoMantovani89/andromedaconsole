@@ -2,19 +2,22 @@ import { existsSync, readdirSync, rmdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { git } from './git';
 import { discoverRepos, repoPathOf } from './repos';
+import { removeTryCheckouts } from './try-checkout';
 import { commonDir, removeWorktree } from './worktree';
 
 const lower = (p: string): string => resolve(p).replace(/\\/g, '/').toLowerCase();
 const inside = (p: string, folder: string): boolean => lower(p).startsWith(`${lower(folder)}/`);
 
 /**
- * Takes a project back to "never opened": removes the worktrees the console made for it (also the ones of the earlier layout, next to
+ * Takes a project back to "never opened": removes the worktrees the console made for it (the try checkouts too; also the ones of the earlier layout, next to
  * the repository), the branches `agent/<project>/*` and `project/<project>`, the push-hook folders of its agents and the project's `.andromedaconsole`.
  * Never touches anything else in the project. Every step is best effort: a branch checked out by the user simply stays.
  * The sessions must be stopped first. `slugs` are the agents on record (their hook folders), `worktrees` the paths on record.
  */
 export async function purgeProject(o: { projectRoot: string; project: string; slugs: string[]; worktrees: string[] }): Promise<void> {
   const consoleDir = join(resolve(o.projectRoot), '.andromedaconsole');
+  // The try checkouts go through git first; one git cannot remove now is still caught below, with every other worktree under .andromedaconsole.
+  await removeTryCheckouts({ projectRoot: o.projectRoot, repos: discoverRepos(o.projectRoot).map((name) => ({ name, path: repoPathOf(o.projectRoot, name) })) }).catch(() => undefined);
   const mine = new Set(o.worktrees.map(lower));
   for (const rel of discoverRepos(o.projectRoot)) {
     const repo = repoPathOf(o.projectRoot, rel);

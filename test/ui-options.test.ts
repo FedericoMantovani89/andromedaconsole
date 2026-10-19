@@ -17,7 +17,10 @@ let dryPuts: unknown[] = [];
 let putStatus = 200;
 let pluginRows: unknown[] = [];
 let pluginInstalled: unknown = null;
+let tryStatus = 200;
+const tryList = [{ repo: 'abc-be', path: 'C:/p/.andromedaconsole/try/abc-be', sha: '1111111111111111111111111111111111111111' }, { repo: 'abc-fe', path: 'C:/p/.andromedaconsole/try/abc-fe', sha: '2222222222222222222222222222222222222222' }];
 beforeEach(() => {
+  tryStatus = 200;
   puts = [];
   dryPuts = [];
   posts = [];
@@ -33,6 +36,7 @@ beforeEach(() => {
       puts.push(JSON.parse(init.body ?? 'null'));
       return json(putStatus, putStatus === 200 ? {} : failBody);
     }
+    if (url === '/api/project/try') { posts.push(`${init?.method} ${url}`); return json(tryStatus, tryStatus !== 200 ? { code: 'try.noProjectBranch', params: { repo: 'abc-be' } } : init?.method === 'DELETE' ? [] : tryList); }
     if (init?.method === 'POST') { posts.push(url); return json(200, url === '/api/prereq/recheck' ? [{ id: 'git', status: 'ok', version: '2.50', required: true }] : { ok: true }); }
     if (url === '/api/prereq/git/install') return json(200, { id: 'git', action: 'install', display: 'winget install --id Git.Git -e --source winget' });
     if (url === '/api/options') return json(200, structuredClone(options)); // a fresh copy: staged edits change the object they are given
@@ -132,6 +136,41 @@ describe('options dialog', () => {
     await openOptions(() => state, 'git');
     expect(document.querySelector('textarea[name="git.secretPatterns"]')).toBeNull();
     expect(document.querySelector('input[name="git.testTimeoutMinutes"]')).not.toBeNull(); // the other git settings stay
+  });
+  it('the Git tab prepares a checkout of the project branch per repo for a try: paths with a copy button, then Remove', async () => {
+    const multi = { ...state, projectIsRepo: true, repos: ['abc-be', 'abc-fe'], prereq: [{ id: 'git', status: 'ok', version: '2.50', required: true }] } as unknown as StateMessage;
+    await openOptions(() => multi, 'git');
+    await flush();
+    expect(document.querySelector('.options-git-try strong')!.getAttribute('data-i18n')).toBe('options.git.try.title');
+    expect(document.querySelector('.options-git-try .info-icon')!.getAttribute('data-i18n-title')).toBe('options.git.try.tip');
+    expect(document.querySelector('button[name="tryRemove"]')).toBeNull(); // nothing to remove yet: not built
+    expect(document.querySelectorAll('input[name="tryPath"]')).toHaveLength(0);
+    document.querySelector<HTMLButtonElement>('button[name="tryPrepare"]')!.click();
+    await flush();
+    expect(posts).toContain('POST /api/project/try');
+    expect([...document.querySelectorAll<HTMLInputElement>('input[name="tryPath"]')].map((i) => i.value)).toEqual(tryList.map((c) => c.path));
+    expect(document.querySelectorAll('button[name="tryCopy"]')).toHaveLength(2);
+    expect(document.querySelector('button[name="tryPrepare"]')!.getAttribute('data-i18n')).toBe('options.git.try.refresh');
+    document.querySelector<HTMLButtonElement>('button[name="tryRemove"]')!.click();
+    await flush();
+    expect(posts).toContain('DELETE /api/project/try');
+    expect(document.querySelectorAll('input[name="tryPath"]')).toHaveLength(0);
+    expect(document.querySelector('button[name="tryRemove"]')).toBeNull();
+  });
+  it('the try section starts from the checkouts in the state, shows a refusal translated, and is not built for a folder with no repository', async () => {
+    const ready = { ...state, projectIsRepo: true, repos: [''], project: { name: 'p', repos: [], tryCheckouts: [tryList[0]] }, prereq: [{ id: 'git', status: 'ok', version: '2.50', required: true }] } as unknown as StateMessage;
+    await openOptions(() => ready, 'git');
+    await flush();
+    expect([...document.querySelectorAll<HTMLInputElement>('input[name="tryPath"]')].map((i) => i.value)).toEqual([tryList[0]!.path]);
+    tryStatus = 409;
+    document.querySelector<HTMLButtonElement>('button[name="tryPrepare"]')!.click();
+    await flush();
+    expect(document.querySelector('.options-dialog .form-error')!.textContent).not.toBe('');
+    document.body.innerHTML = '<div id="overlay" hidden></div>';
+    const none = { ...state, projectIsRepo: false, repos: [], prereq: [{ id: 'git', status: 'ok', version: '2.50', required: true }] } as unknown as StateMessage;
+    await openOptions(() => none, 'git');
+    await flush();
+    expect(document.querySelector('.options-git-try')).toBeNull();
   });
   it('the red git line follows the state each time the tab is shown: it goes away after git is installed', async () => {
     let now = { ...state, projectIsRepo: true, repos: [''], prereq: [{ id: 'git', status: 'missing', required: true }] } as unknown as StateMessage;

@@ -58,6 +58,8 @@ if (kind === 'multi') {
   // abc-be detects nothing (no build file), abc-fe detects `npm test`: the Project tab shows a row per repository, one with n/a.
   for (const name of ['abc-be', 'abc-fe']) { const sub = join(project, name); mkdirSync(sub); git(sub, 'init', '-q', '-b', 'main'); }
   writeFileSync(join(project, 'abc-fe', 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
+  // A first commit and the project branch in each: the Git tab's try checkouts can be prepared (`--click 'button[name="tryPrepare"]'`).
+  for (const name of ['abc-be', 'abc-fe']) { const sub = join(project, name); git(sub, 'add', '-A'); git(sub, 'commit', '-q', '--allow-empty', '-m', 'init'); git(sub, 'branch', 'project/shot-demo'); }
 }
 
 const server = await startServer({ port: 0, projectRoot: project, projectName: 'shot-demo', configDir, claudeCommand: [process.execPath, fixture], modDir: null, projectsDir: tmpdir(),

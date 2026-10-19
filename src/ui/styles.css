@@ -449,6 +449,11 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .options-plugin.is-installed { border-color: var(--ok, #4cc38a); }
 .settings-test.is-off { opacity: .5; }
 .options-git-init, .options-git-clone { display: grid; gap: 8px; justify-items: start; margin-top: 10px; }
+.options-git-try { display: grid; gap: 8px; margin-top: 14px; }
+.options-git-try-list { display: grid; gap: 8px; }
+.options-git-try-list:empty { display: none; }
+.options-git-try-row { display: grid; gap: 4px; }
+.options-git-try-row .settings-note { margin: 0; }
 .options-git-clone .options-select-row { width: 100%; justify-self: stretch; }
 .options-git-clone .options-select-row input { flex: 1 1 auto; min-width: 0; }
 .archive-confirm { display: flex; gap: 8px; align-items: center; margin: 8px 0; }

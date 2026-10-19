@@ -33,6 +33,8 @@ import type { UiAssets } from './ui-assets';
 import type { UpdateControl, UpdateState } from '../shared/update';
 import { isValidProjectField, isValidRepoTestCommands, isValidTestCommand, isValidTestCommands, type ProjectInfo, PROJECT_FIELDS, PROJECT_RANGES, unknownRepos } from './project-store';
 import { repoPathOf } from './git/repos';
+import { TryError, type TryCheckoutService } from './git/try-checkout';
+import { errorMessage } from '../shared/guards';
 import { loadTemplates } from './templates/load';
 import { detectProject } from './templates/detect';
 import { saveTemplate } from './templates/save';
@@ -87,6 +89,8 @@ export interface Context extends V1Context {
   repos(): string[];
   /** Drops the remembered list of repositories (one was just made). */
   forgetRepos(): void;
+  /** The checkouts of the project branch the user tries the integration in (SPEC 9): what the state shows, prepare and remove. */
+  tryCheckouts: TryCheckoutService;
   /** Once per repository: keeps `.andromedaconsole/` out of its git status and installs the release hook. Never rejects. */
   prepareRepo(path: string): Promise<void>;
   /** Build version (latest tag on main), shown on the splash and in the tab title. */
@@ -247,6 +251,7 @@ export function buildState(ctx: Context): StateMessage {
   let offeredProfiles: string[] | undefined;
   try { ({ testCommand, testCommands, repoTestCommands, testsDisabled, squash, model, maxActive, profiles: offeredProfiles } = ctx.store.project); } catch { /* a damaged project.json: shown as not set */ }
   const repos = ctx.repos();
+  const tryCheckouts = ctx.tryCheckouts.list();
   // A folder that holds several repositories: each one has its own row in Options, with what its own files suggest.
   const repoNames = repos.filter((r) => r !== '');
   const detectedRepos = Object.fromEntries(repoNames.flatMap((r) => { const d = ctx.detectedTestCommand(repoPathOf(ctx.projectRoot, r)); return d ? [[r, d]] : []; }));
@@ -262,7 +267,7 @@ export function buildState(ctx: Context): StateMessage {
     ...(slept.phase !== 'awake' ? { sleep: { ...(slept.until !== undefined ? { until: slept.until } : {}), phase: slept.phase, attempt: slept.attempt, weekly: slept.kind === 'seven_day' } } : {}),
     // One project per console today: the stricter of the global and the per-project limit is the one that holds.
     limits: { active: ctx.scheduler.activeCount(), max: (({ global, perProject }) => Math.min(global, perProject))(ctx.scheduler.effectiveLimits()) },
-    type: 'state', project: { name: ctx.projectName, ...(testCommand ? { testCommand } : {}), ...(testCommands ? { testCommands } : {}), ...(ctx.detectedTestCommand() ? { detectedTestCommand: ctx.detectedTestCommand() } : {}), repos: repoNames, ...(repoTestCommands ? { repoTestCommands } : {}), ...(Object.keys(detectedRepos).length > 0 ? { detectedRepoTestCommands: detectedRepos } : {}), ...(squash !== undefined ? { squash } : {}), ...(testsDisabled ? { testsDisabled } : {}), ...(model ? { model } : {}), ...(maxActive !== undefined ? { maxActive } : {}) }, settings: { bypassPermissions: ctx.bypass, guardMode: ctx.guardMode, worktrees: ctx.git.worktrees }, main, agents, language: ctx.language, languages: [...ctx.bundles.keys()].sort(), profiles: pickableProfiles(offeredProfiles, profileNamesOf(ctx.projectRoot, join(dirname(ctx.configPath), 'profiles'))),
+    type: 'state', project: { name: ctx.projectName, ...(testCommand ? { testCommand } : {}), ...(testCommands ? { testCommands } : {}), ...(ctx.detectedTestCommand() ? { detectedTestCommand: ctx.detectedTestCommand() } : {}), repos: repoNames, ...(repoTestCommands ? { repoTestCommands } : {}), ...(Object.keys(detectedRepos).length > 0 ? { detectedRepoTestCommands: detectedRepos } : {}), ...(squash !== undefined ? { squash } : {}), ...(testsDisabled ? { testsDisabled } : {}), ...(model ? { model } : {}), ...(maxActive !== undefined ? { maxActive } : {}), ...(tryCheckouts.length > 0 ? { tryCheckouts } : {}) }, settings: { bypassPermissions: ctx.bypass, guardMode: ctx.guardMode, worktrees: ctx.git.worktrees }, main, agents, language: ctx.language, languages: [...ctx.bundles.keys()].sort(), profiles: pickableProfiles(offeredProfiles, profileNamesOf(ctx.projectRoot, join(dirname(ctx.configPath), 'profiles'))),
     prereq: ctx.getPrereq(), helperUse: ctx.getHelperUse(), needsSetup: ctx.needsSetup(), projectIsRepo: repos.length > 0, repos, projectRoot: ctx.projectRoot,
     ...(() => { const rows = ctx.requests.rows(); return rows.length > 0 ? { requests: rows } : {}; })(),
     queue: ctx.questions.pending(),
@@ -647,6 +652,20 @@ export function createRequestHandler(source: Context | ProjectResolver, host: Ho
       ctx.broadcastState();
       const saved = ctx.store.project;
       return send(res, 200, { ...(hasCommand && saved.testCommand ? { testCommand: saved.testCommand } : {}), ...(hasMoments && saved.testCommands ? { testCommands: saved.testCommands } : {}), ...(hasRepos && saved.repoTestCommands ? { repoTestCommands: saved.repoTestCommands } : {}), ...(hasSquash ? { squash: b.squash } : {}), ...(hasTests ? { testsDisabled: b.testsDisabled } : {}), ...Object.fromEntries(projectFields.filter((f) => saved[f] !== undefined).map((f) => [f, saved[f]])) });
+    }
+
+    // A checkout of the project branch per repository for the user to try the integration (SPEC 9): made or moved to the tip, or removed.
+    // Nothing of the user's runs here; the answer is the list of folders.
+    if (path === '/api/project/try' && (req.method === 'POST' || req.method === 'DELETE')) {
+      try {
+        const list = req.method === 'POST' ? await ctx.tryCheckouts.prepare() : (await ctx.tryCheckouts.remove(), []);
+        ctx.broadcastState();
+        return send(res, 200, list);
+      } catch (e) {
+        ctx.broadcastState(); // a refusal halfway may have changed what is there
+        if (e instanceof TryError) return fail(res, e.code === 'try.noProjectBranch' || e.code === 'try.folderTaken' ? 409 : 422, e.code, e.params);
+        return fail(res, 422, 'try.failed', { reason: errorMessage(e) });
+      }
     }
 
     if (req.method === 'POST' && path === '/api/projects/save-template') {

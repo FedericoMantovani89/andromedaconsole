@@ -10,6 +10,7 @@ import { openRestartDialog } from './restart-dialog';
 import { renderProfilesTab } from './options-profiles';
 import { fillModelSelect, loadModelSelect } from './model-select';
 import { renderGitProject } from './git-section';
+import { renderTryCheckouts } from './try-section';
 import { renderNotificationsTab } from './options-notifications';
 import { renderSecretsTab } from './options-secrets';
 import { openSaveTemplateDialog } from './new-project';
@@ -309,6 +310,11 @@ function gitTab(env: Env): HTMLElement {
   box.addEventListener('optionsshow', syncMissing);
   syncMissing();
   box.append(renderGitProject(env.state, env.fail, heading(k('options.git.project'))));
+  const tryBox = renderTryCheckouts(env.state, env.getState, env.fail);
+  if (tryBox) {
+    box.append(tryBox);
+    box.addEventListener('optionsshow', () => tryBox.dispatchEvent(new Event('optionsshow')));
+  }
   box.append(
     fields(env, [
       { path: 'git.worktrees', label: k('options.git.worktrees'), kind: 'bool', help: k('options.git.worktrees.help') },
