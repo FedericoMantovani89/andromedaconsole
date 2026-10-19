@@ -45,6 +45,10 @@ export interface Ticket {
   repo?: string;
   /** The agent this ticket was started after (`spawn_agent after`): it is not reviewed or merged before that agent's ticket is merged. */
   after?: string;
+  /** Why the main could not do without `after` (a last resort, shown to the user in the report and in list_agents). */
+  afterReason?: string;
+  /** With `after`: the commit this agent's branch started from (the other agent's tip then). Its own work is `baseSha..deliveredSha`. */
+  baseSha?: string;
   /** The central full run on the merged project branch (`CentralRun`): the tip it passed on, or where it turned red and blamed this ticket. */
   central?: CentralMark;
 }
@@ -131,8 +135,12 @@ export class TicketStore {
     return this.save({ ...this.ensure(slug), repo });
   }
 
-  setAfter(slug: string, after: string): Ticket {
-    return this.save({ ...this.ensure(slug), after });
+  setAfter(slug: string, after: string, afterReason: string): Ticket {
+    return this.save({ ...this.ensure(slug), after, afterReason });
+  }
+
+  setBaseSha(slug: string, baseSha: string): Ticket {
+    return this.save({ ...this.ensure(slug), baseSha });
   }
 
   setCentral(slug: string, central: CentralMark): Ticket {
@@ -251,7 +259,10 @@ export class TicketStore {
     const target = this.file(to);
     if (existsSync(target)) throw new Error('ticket.exists');
     renameSync(this.file(from), target); // the file moves first (one atomic rename), then the slug inside it follows
-    return this.save({ ...t, slug: to });
+    const moved = this.save({ ...t, slug: to });
+    // A ticket started after the old name now waits for the new one: the dependency follows the work, not the name.
+    for (const d of this.list()) if (d.after === from) this.save({ ...d, after: to });
+    return moved;
   }
 
   progress(slug: string): TicketProgress | undefined {

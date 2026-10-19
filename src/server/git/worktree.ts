@@ -138,7 +138,7 @@ export async function removeWorktree(repo: string, path: string): Promise<void> 
  * agent/<project>/<slug> from the project branch (or from `startPoint`), in <repo>.worktrees/<slug> (SPEC 9.2). Refuses an existing folder or branch;
  * anything it created is removed again if a later step fails.
  */
-export function createAgentWorktree(o: { repo: string; project: string; slug: string; dir?: string; /** an existing branch to check out instead of a new one */ branch?: string; /** the branch the new one starts from (default the project branch) */ startPoint?: string }): Promise<{ path: string; branch: string }> {
+export function createAgentWorktree(o: { repo: string; project: string; slug: string; dir?: string; /** an existing branch to check out instead of a new one */ branch?: string; /** the branch the new one starts from (default the project branch) */ startPoint?: string }): Promise<{ path: string; branch: string; /** the commit `startPoint` was at, when one was given */ base?: string }> {
   return withRepoLock(o.repo, () => (o.branch === undefined ? createAgentWorktreeUnlocked(o) : resumeBranchWorktreeUnlocked({ ...o, branch: o.branch })));
 }
 
@@ -160,15 +160,19 @@ async function resumeBranchWorktreeUnlocked(o: { repo: string; project: string; 
 /** A branch name the console may pass to git as an argument (no option, no odd characters). */
 const isBranchName = (b: string): boolean => /^[A-Za-z0-9._/-]+$/.test(b) && !b.startsWith('-');
 
-async function createAgentWorktreeUnlocked(o: { repo: string; project: string; slug: string; dir?: string; startPoint?: string }): Promise<{ path: string; branch: string }> {
+async function createAgentWorktreeUnlocked(o: { repo: string; project: string; slug: string; dir?: string; startPoint?: string }): Promise<{ path: string; branch: string; base?: string }> {
   if (!SLUG_RE.test(o.slug)) throw new GitError('git.badName', `invalid slug ${o.slug}`);
   if (o.startPoint !== undefined && !isBranchName(o.startPoint)) throw new GitError('git.badName', `invalid branch ${o.startPoint}`);
   const project = await ensureProjectBranchUnlocked(o.repo, o.project);
-  // An agent started after another one (`spawn_agent after`) branches from that agent's branch, so it sees its committed work.
-  const from = o.startPoint ?? project.branch;
-  if (o.startPoint !== undefined && (await git(o.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${o.startPoint}`])).code !== 0) {
-    throw new GitError('git.failed', `branch ${o.startPoint} does not exist`);
+  // An agent started after another one (`spawn_agent after`) branches from that agent's branch, so it sees its committed work. The
+  // branch is read once as a commit: the new branch starts exactly there (that agent may commit meanwhile), and the caller keeps it.
+  let base: string | undefined;
+  if (o.startPoint !== undefined) {
+    const tip = await git(o.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${o.startPoint}`]);
+    if (tip.code !== 0) throw new GitError('git.failed', `branch ${o.startPoint} does not exist`);
+    base = tip.stdout.trim();
   }
+  const from = base ?? project.branch;
   const branch = agentBranchFor(o.project, o.slug);
   const path = worktreePathFor(o.repo, o.slug, o.dir);
   if (existsSync(path)) throw new GitError('git.worktreeExists', `folder ${path} already exists`);
@@ -178,5 +182,5 @@ async function createAgentWorktreeUnlocked(o: { repo: string; project: string; s
   const undo = (): Promise<unknown> => git(o.repo, ['branch', '-D', branch]);
   await addWorktree(o.repo, path, ['-b', branch, fwd(path), from], undo);
   await excludeOrRollback(o.repo, path, undo);
-  return { path, branch };
+  return { path, branch, ...(base !== undefined ? { base } : {}) };
 }

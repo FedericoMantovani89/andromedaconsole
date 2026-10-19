@@ -27,6 +27,8 @@ export interface SpawnRequest {
    * so its committed work is there, and this ticket is not reviewed or merged before that one is merged.
    */
   after?: string;
+  /** Why `after` is needed (required with it: a dependency between agents is a last resort, and the user sees the reason). */
+  afterReason?: string;
 }
 
 /** `ready` is present when the start is asynchronous (it creates a worktree first): it rejects if the start fails. */

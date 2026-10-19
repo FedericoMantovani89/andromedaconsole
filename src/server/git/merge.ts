@@ -107,10 +107,11 @@ async function commitStaged(cwd: string, message: string): Promise<{ ok: true } 
  * Merges `sha` into the branch checked out in `wt` (the console's project worktree): squashed into one commit, or kept behind a merge
  * commit. On a conflict nothing is forced: the worktree is put back exactly where it was and the conflicting files are returned.
  */
-export async function mergeIntoProject(o: { wt: string; sha: string; message: string; squash: boolean }): Promise<MergeOutcome> {
+export async function mergeIntoProject(o: { wt: string; sha: string; message: string; squash: boolean; /** squash only what came after this commit (a dependent ticket) */ base?: string }): Promise<MergeOutcome> {
   const prevRes = await git(o.wt, ['rev-parse', 'HEAD']);
   if (prevRes.code !== 0) return { ok: false, kind: 'failed', detail: prevRes.stderr.trim() };
   const prev = prevRes.stdout.trim();
+  if (o.squash && o.base !== undefined) return squashFromBase({ ...o, base: o.base, prev });
   const merged = await git(o.wt, ['merge', ...(o.squash ? ['--squash'] : ['--no-ff']), '--no-commit', o.sha]);
   if (merged.code !== 0) {
     const files = (await git(o.wt, ['diff', '--name-only', '--diff-filter=U'])).stdout.split(/\r?\n/).filter(Boolean);
@@ -124,6 +125,26 @@ export async function mergeIntoProject(o: { wt: string; sha: string; message: st
     await git(o.wt, ['reset', '--hard', '-q', prev]);
     return { ok: false, kind: 'failed', detail: committed.detail };
   }
+  const tip = await git(o.wt, ['rev-parse', 'HEAD']);
+  return { ok: true, sha: tip.stdout.trim() };
+}
+
+/**
+ * The squash of a ticket started after another one (`spawn_agent after`): a three-way merge whose base is the commit the branch started
+ * from, so only the ticket's own changes are applied; the other agent's commits came in through that agent's own (squash) merge, and its
+ * later changes to the same files are no conflict. `git merge-tree --write-tree` (git 2.40 or later for `--merge-base`) computes it in
+ * memory: on a conflict nothing in the worktree has changed. A clean result is checked out (`read-tree -m -u`) and committed.
+ */
+async function squashFromBase(o: { wt: string; sha: string; message: string; base: string; prev: string }): Promise<MergeOutcome> {
+  const tree = await git(o.wt, ['merge-tree', '--write-tree', '--name-only', '--no-messages', `--merge-base=${o.base}`, o.prev, o.sha]);
+  const lines = tree.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (tree.code === 1 && lines.length > 1) return { ok: false, kind: 'conflict', files: [...new Set(lines.slice(1))] };
+  if (tree.code !== 0 || !/^[0-9a-f]{40,64}$/.test(lines[0] ?? '')) return { ok: false, kind: 'failed', detail: `${tree.stderr}\n${tree.stdout}`.trim() };
+  const undo = async (): Promise<void> => { await git(o.wt, ['reset', '--hard', '-q', o.prev]); await git(o.wt, ['clean', '-fdq']); };
+  const read = await git(o.wt, ['read-tree', '-m', '-u', o.prev, lines[0]!]);
+  if (read.code !== 0) { await undo(); return { ok: false, kind: 'failed', detail: read.stderr.trim() }; }
+  const committed = await commitStaged(o.wt, o.message);
+  if (!committed.ok) { await undo(); return { ok: false, kind: 'failed', detail: committed.detail }; }
   const tip = await git(o.wt, ['rev-parse', 'HEAD']);
   return { ok: true, sha: tip.stdout.trim() };
 }

@@ -20,7 +20,12 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
   const store = k.get('store');
   const broadcast = k.get('broadcast');
   const tickets = k.get('tickets');
-  const afterOf = (slug: string): string | undefined => { try { return tickets.get(slug)?.after; } catch { return undefined; } };
+  const afterOf = (slug: string): { after?: string; afterReason?: string } => {
+    try {
+      const t = tickets.get(slug);
+      return t?.after ? { after: t.after, ...(t.afterReason ? { afterReason: t.afterReason } : {}) } : {};
+    } catch { return {}; }
+  };
   return {
     list_agents: async (caller) => {
       // The main also sees what only it can settle (escalated requests, questions to it): a restart or a lost message forgets nothing.
@@ -35,7 +40,7 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
           // Where the ticket is when it is not simply being written (suspended, delivered...): the main decides what to resume from it.
           ...(() => { const t = a.role === 'agent' ? ticketStatusOf(a.slug) : undefined; return t && t !== 'in_progress' ? { ticket: t } : {}; })(),
           // The agent it was started after: the main knows this ticket waits for that one to be merged.
-          ...(() => { const after = a.role === 'agent' ? afterOf(a.slug) : undefined; return after ? { after } : {}; })(),
+          ...(a.role === 'agent' ? afterOf(a.slug) : {}),
         })),
         ...(held.length > 0 ? { requests: held } : {}),
         ...(pendingRelease ? { release: { id: pendingRelease.id, status: 'pending' as const } } : {}),
@@ -72,9 +77,15 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
       }
       // An optional other agent this one starts after (its branch, and its ticket merged before this one is reviewed or merged).
       if (b.after !== undefined && (typeof b.after !== 'string' || b.after === '')) return badRequest('after must be the name of another agent');
+      // `after` is a last resort: the main says why no other way works, and the user sees it (report, list_agents).
+      const afterReason = typeof b.after_reason === 'string' ? b.after_reason.trim() : undefined;
+      if (b.after !== undefined && afterReason === undefined) return { status: 'error', code: 'after_reason_required' };
+      if (b.after !== undefined && (afterReason!.length < 20 || afterReason!.length > 500)) {
+        return { status: 'error', code: 'after_reason_required', detail: 'after_reason must be 20 to 500 characters saying why no other way works' };
+      }
       const out = await spawnAgent(k.get('ctx'), {
         slug: b.name, profile: b.profile, goal: b.goal, model: typeof b.model === 'string' ? b.model : undefined, source: 'main',
-        ...(b.budget !== undefined ? { budget: b.budget as number } : {}), ...(typeof b.repo === 'string' ? { repo: b.repo } : {}), ...(typeof b.after === 'string' ? { after: b.after } : {}),
+        ...(b.budget !== undefined ? { budget: b.budget as number } : {}), ...(typeof b.repo === 'string' ? { repo: b.repo } : {}), ...(typeof b.after === 'string' ? { after: b.after, afterReason } : {}),
       });
       if (!out.ok) return { status: 'error', code: out.code, ...(out.params ? { params: out.params } : {}) };
       return out.status === 'started' ? { status: 'started', name: out.slug } : { status: 'queued', name: out.slug, position: out.position };

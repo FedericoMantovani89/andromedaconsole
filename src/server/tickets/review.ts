@@ -1,5 +1,5 @@
 import type { Translate } from '../../shared/i18n';
-import { afterGate, type AfterRefusal } from './after-gate';
+import { afterGate, afterState, ownWorkBase, type AfterRefusal, type AfterState } from './after-gate';
 import { git } from '../git/git';
 import { changedFiles } from '../git/merge';
 import { buildReport, isDocFile, writeReport, type ChangedFile } from './report';
@@ -43,8 +43,12 @@ export interface ReportFacts {
   docsChanged: boolean;
   /** Changed files that look unrelated to the goal (lock files, build output, logs) and are not named in it. */
   foreignHints: string[];
-  /** The agent this ticket was started after and where its ticket is (`missing` when it is gone): this one waits for its merge. */
-  after?: { name: string; status: string };
+  /** The agent this ticket was started after, where its ticket is (`missing` when it is gone) and whether its work is merged (the gate). */
+  after?: AfterState;
+  /** Why the main started it after the other agent (`after` is a last resort; the user sees why). */
+  afterReason?: string;
+  /** For a ticket started after another one: the commit its own work starts from (`files` are `base..delivered`, not the other agent's). */
+  base?: string;
 }
 
 export type TicketReportResult =
@@ -59,7 +63,7 @@ export type RequestReviewResult =
   | { ok: true; status: 'needs_user' }
   | { ok: false; code: 'spawn_failed' | Extract<TicketReportResult, { ok: false }>['code']; detail?: string }
   /** Started after another agent whose ticket is not merged yet (`spawn_agent after`). */
-  | { ok: false; code: AfterRefusal['code']; params: AfterRefusal['params']; detail?: undefined };
+  | { ok: false; code: AfterRefusal['code']; params: AfterRefusal['params']; detail: string };
 
 export type VerdictResult =
   | { ok: true; ticket: string; outcome: 'approved' }
@@ -89,6 +93,8 @@ export function reviewerSlugFor(ticket: string, taken: readonly string[]): strin
 export interface ReviewerGoalInput {
   slug: string; project: string; sha: string; goal?: string; testsOk: boolean | undefined; testsInhibited?: boolean; files: number; added: number; removed: number;
   reportFile: string; round: number; previous: Verdict[];
+  /** A ticket started after another one: the diff starts at this commit (the project branch would show the other agent's work too). */
+  base?: string;
 }
 
 /** What the reviewer is told first (English: it is a prompt, not interface text). */
@@ -103,7 +109,9 @@ export function reviewerGoal(i: ReviewerGoalInput): string {
     `- ${i.files} files changed, +${i.added} -${i.removed}`,
     `- the full report is the file ${i.reportFile}`,
     '',
-    `How: your folder is a checkout of the delivered commit. See the change with: git diff project/${i.project}...HEAD . Read the surrounding code where you need to.`,
+    i.base
+      ? `How: your folder is a checkout of the delivered commit. This ticket was started on top of another agent's work: see only this ticket's change with: git diff ${i.base.slice(0, 12)}..HEAD (git diff project/${i.project}...HEAD would also show the other agent's work, which is not under review). Read the surrounding code where you need to.`
+      : `How: your folder is a checkout of the delivered commit. See the change with: git diff project/${i.project}...HEAD . Read the surrounding code where you need to.`,
     'Look for defects a user would hit (wrong behaviour, missing cases, crashes, unsafe handling, a test that proves nothing), and for work that does not match the objective or files nobody asked for. Not style.',
   ];
   if (i.previous.length > 0) {
@@ -168,7 +176,9 @@ export class ReviewService {
       this.d.tickets.setTests(slug, tests);
     }
 
-    const files = await changedFiles(wt.worktree, `project/${this.d.project}`, sha);
+    // A ticket started after another one: its own work only (the other agent's commits are reviewed and merged with that agent).
+    const base = await ownWorkBase(wt.worktree, this.d.project, ticket, sha);
+    const files = await changedFiles(wt.worktree, base ?? `project/${this.d.project}`, sha);
     if (!files) return { ok: false, code: 'git_failed', detail: 'could not list the changed files' };
     const goal = ticket.goal ?? '';
     const foreignHints = files.map((f) => f.path).filter((p) => FOREIGN.some((re) => re.test(p)) && !goal.toLowerCase().includes(p.slice(p.lastIndexOf('/') + 1).toLowerCase()));
@@ -179,12 +189,13 @@ export class ReviewService {
       verdicts: ticket.verdicts, lang, t, generatedAt: new Date().toISOString(),
     });
     const reportFile = writeReport(this.d.root, slug, report);
+    const after = await afterState(this.d, ticket); // the same answer the gate gives
     return {
       ok: true, report, reportFile,
       facts: {
         files, testsOk: tests?.ok, ...(inhibited ? { testsInhibited: true as const } : {}), checklistComplete: ticket.steps.length > 0 && ticket.steps.every((s) => s.done),
         docsChanged: files.some((f) => isDocFile(f.path)), foreignHints,
-        ...(ticket.after !== undefined ? { after: { name: ticket.after, status: this.d.tickets.get(ticket.after)?.status ?? 'missing' } } : {}),
+        ...(after ? { after } : {}), ...(ticket.afterReason ? { afterReason: ticket.afterReason } : {}), ...(base !== undefined ? { base } : {}),
       },
     };
   }
@@ -199,7 +210,7 @@ export class ReviewService {
       if (!ticket || ticket.status !== 'delivered' || !ticket.deliveredSha) return { ok: false, code: 'not_delivered' };
       // A ticket started after another one is reviewed only once that one is merged (SPEC 15.4): before the tests, which cost time.
       const waiting = await afterGate(this.d, ticket);
-      if (waiting) return { ok: false, code: waiting.code, params: waiting.params };
+      if (waiting) return { ok: false, code: waiting.code, params: waiting.params, detail: waiting.detail };
       const report = await this.ticketReport(slug);
       if (!report.ok) return { ok: false, code: report.code, detail: report.detail };
       const sha = ticket.deliveredSha;
@@ -216,6 +227,7 @@ export class ReviewService {
       const goal = reviewerGoal({
         slug, project: this.d.project, sha, goal: ticket.goal, testsOk: tests?.ok, testsInhibited: report.facts.testsInhibited === true, files: report.facts.files.length, added: sum.a, removed: sum.r,
         reportFile: report.reportFile.replace(/\\/g, '/'), round, previous: ticket.verdicts,
+        ...(report.facts.base !== undefined ? { base: report.facts.base } : {}),
       });
       const started = await this.d.spawnReviewer({ slug: reviewer, ticket: slug, sha, goal, model: o.model });
       if (!started.ok) return { ok: false, code: 'spawn_failed', detail: started.detail ?? started.code };

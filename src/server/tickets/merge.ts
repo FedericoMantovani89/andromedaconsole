@@ -7,7 +7,7 @@ import { git } from '../git/git';
 import { worktreesDirFor } from '../git/worktree';
 import { changedFiles, ensureProjectWorktree, mergeIntoProject, resetTo, startMergeForAuthor, withProjectLock } from '../git/merge';
 import { commonDir, removeWorktree } from '../git/worktree';
-import { afterGate, type AfterRefusal } from './after-gate';
+import { afterGate, ownWorkBase, type AfterRefusal } from './after-gate';
 import { boundedWait } from './bounded-wait';
 import { squashMessage } from './report';
 import type { TicketStore } from './store';
@@ -51,7 +51,7 @@ export type MergeResult =
   | { status: 'tests_failed'; tail: string }
   | { status: 'refused'; code: 'not_approved' | 'no_worktree' | 'author_moved' | 'project_branch_checked_out' | 'git_failed'; detail?: string }
   /** Started after another agent whose ticket is not merged yet (`spawn_agent after`): refused at once, no job is started. */
-  | { status: 'refused'; code: AfterRefusal['code']; params: AfterRefusal['params'] }
+  | { status: 'refused'; code: AfterRefusal['code']; params: AfterRefusal['params']; detail: string }
   /** The bounded wait ended before the merge did: the merge goes on, ask again. */
   | { status: 'running' };
 
@@ -90,7 +90,7 @@ export class MergeService {
     const pending: Promise<MergeResult> = afterGate(this.d, ticket).then(
       (refused): MergeResult | Promise<MergeResult> => {
         if (this.jobs.get(slug) === pending) this.jobs.delete(slug);
-        return refused ? { status: 'refused', code: refused.code, params: refused.params } : this.start(slug);
+        return refused ? { status: 'refused', code: refused.code, params: refused.params, detail: refused.detail } : this.start(slug);
       },
       (e: unknown): MergeResult => {
         if (this.jobs.get(slug) === pending) this.jobs.delete(slug);
@@ -168,13 +168,15 @@ export class MergeService {
       return this.completeMerge(slug, author, adopted);
     }
 
-    const files = (await changedFiles(repo, `project/${this.d.project}`, ticket.deliveredSha)) ?? [];
+    // A ticket started after another one: only its own commits count (the other agent's work came in through its own merge).
+    const base = await ownWorkBase(repo, this.d.project, ticket, ticket.deliveredSha);
+    const files = (await changedFiles(repo, base ?? `project/${this.d.project}`, ticket.deliveredSha)) ?? [];
     const { lang, t } = this.d.language();
     const message = squashMessage({
       slug, project: this.d.project, branch: author.branch, goal: ticket.goal, steps: ticket.steps, files, tests: ticket.tests, testsInhibited: this.d.testsDisabled?.() === true,
       verdicts: ticket.verdicts, lang, t,
     });
-    const merged = await mergeIntoProject({ wt: project.path, sha: ticket.deliveredSha, message, squash: this.d.squash() });
+    const merged = await mergeIntoProject({ wt: project.path, sha: ticket.deliveredSha, message, squash: this.d.squash(), ...(base !== undefined ? { base } : {}) });
     if (!merged.ok) {
       if (merged.kind === 'conflict') return await this.conflict(slug, merged.files, author.worktree);
       return { status: 'refused', code: 'git_failed', detail: merged.detail };

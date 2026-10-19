@@ -109,7 +109,7 @@ export async function spawnAgent(ctx: Context, r: SpawnRequest): Promise<SpawnOu
     // The review, the merge and the release find the repository again from the ticket.
     if (ctx.git.worktrees && request.repo !== undefined && roleOf(r) === 'agent' && !r.resumeBranch) ctx.tickets.setRepo(v.slug, request.repo);
     // The review and the merge wait for the other ticket (SPEC 15.4); a restart finds the dependency again on the ticket.
-    if (r.after !== undefined && roleOf(r) === 'agent' && !r.resumeBranch) ctx.tickets.setAfter(v.slug, r.after);
+    if (r.after !== undefined && roleOf(r) === 'agent' && !r.resumeBranch) ctx.tickets.setAfter(v.slug, r.after, r.afterReason ?? '');
     const result = ctx.scheduler.request(request);
     ctx.broadcastState();
     if (result.status === 'started' && result.ready) await result.ready;
@@ -148,9 +148,11 @@ async function checkAfter(ctx: Context, slug: string, after: string, repo: strin
  */
 function startPointOf(ctx: Context, r: SpawnRequest): string | undefined {
   if (r.after === undefined || r.resumeBranch !== undefined || detachedOf(r)) return undefined;
-  const status = ctx.tickets.get(r.after)?.status;
+  // The ticket's name, when the other agent was replaced while this request waited (the rename follows it); the branch stays its own.
+  const after = ctx.tickets.get(r.slug)?.after ?? r.after;
+  const status = ctx.tickets.get(after)?.status;
   if (status === 'merged' || status === 'released') return undefined;
-  return ctx.registry.get(r.after)?.git?.branch ?? agentBranchFor(ctx.projectName, r.after);
+  return ctx.registry.get(after)?.git?.branch ?? agentBranchFor(ctx.projectName, r.after);
 }
 
 /**
@@ -175,7 +177,7 @@ export function launchAgent(ctx: Context, r: SpawnRequest): void | Promise<void>
 }
 
 async function startInWorktree(ctx: Context, r: SpawnRequest, profile: Profile, bypass: boolean): Promise<void> {
-  let made: { path: string; branch: string } | undefined;
+  let made: { path: string; branch: string; base?: string } | undefined;
   const repo = repoPathOf(ctx.projectRoot, r.repo);
   const dir = worktreesDirFor(ctx.projectRoot, repo);
   try {
@@ -186,6 +188,8 @@ async function startInWorktree(ctx: Context, r: SpawnRequest, profile: Profile, 
     made = detached
       ? { path: (await createReviewWorktree({ repo, slug: r.slug, sha: detached.sha, dir })).path, branch: `${detached.prefix}/${r.slug}` }
       : await createAgentWorktree({ repo, project: ctx.projectName, slug: r.slug, dir, ...(r.resumeBranch ? { branch: r.resumeBranch } : {}), ...(startPoint ? { startPoint } : {}) });
+    // Where this agent's own work begins: its report, review and squash merge take only what came after it (SPEC 15.4).
+    if (made.base !== undefined) ctx.tickets.setBaseSha(r.slug, made.base);
     await installPushHook({ repo, worktree: made.path, branch: made.branch, slug: r.slug });
     await ctx.afterWorktreeCreated?.(r.slug);
     ctx.registry.setGit(r.slug, { worktree: made.path, branch: made.branch, repo });
