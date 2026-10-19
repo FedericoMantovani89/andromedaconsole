@@ -38,6 +38,35 @@ describe('the shipped working profiles and their shared rules', () => {
       expect(body, name).toContain("answer a colleague's request before");
     }
   });
+  it('the shared rules can be followed: no reordering the checklist, a draft for an absent consumer goes to the main, and the message cap and timing are named', () => {
+    for (const name of WORKING) {
+      const body = loadProfile(name, tmp(), tmp())!.body.toLowerCase();
+      expect(body, name).not.toContain('front of your checklist'); // validateChecklist pins Study and Tests as steps 1 and 2
+      expect(body, name).toContain('after the closed ones and never before study or tests');
+      expect(body, name).toContain("'ask the main'");
+      expect(body, name).toContain('send the draft to the main');
+      expect(body, name).toContain('8000 characters');
+      expect(body, name).toContain('after your study step, before your tests step');
+    }
+  });
+  it('backend and frontend run the tests of what they changed and ask the main when there is no colleague to ask', () => {
+    for (const name of ['backend', 'frontend']) {
+      const body = loadProfile(name, tmp(), tmp())!.body.toLowerCase();
+      expect(body, name).toContain('run the tests of what you changed before you close a step; the console runs the full suite at the validation step');
+      expect(body, name).not.toContain("run the project's tests before you close a step");
+      expect(body, name).toMatch(/when there is no [a-z ]*agent, ask the main/);
+    }
+  });
+  it('the dba aims every run at the clone, keeps dumps out of the commits and cleans up what it made', () => {
+    const body = loadProfile('dba', tmp(), tmp())!.body.toLowerCase();
+    expect(body).toContain('explicitly at the clone');
+    expect(body).toContain('check the target before each run');
+    expect(body).toContain('only into a container of its own');
+    expect(body).toContain('touch only the containers and databases you created');
+    expect(body).toContain('writing to it is not');
+    expect(body).toContain('outside your worktree');
+    expect(body).toContain('never commit real data');
+  });
   it('the dba proves a migration on a clone, never on the shared database first, and says when a remote database cannot be cloned', () => {
     const body = loadProfile('dba', tmp(), tmp())!.body.toLowerCase();
     expect(body).toContain('never run a migration on the shared database');
