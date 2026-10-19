@@ -55,7 +55,7 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
       const b = (typeof body === 'object' && body !== null ? body : {}) as { name?: unknown; model?: unknown };
       if (typeof b.name !== 'string' || b.name === '') return badRequest('name is required');
       const r = await review.requestReview(b.name, { model: typeof b.model === 'string' && b.model !== '' ? b.model : undefined });
-      if (!r.ok) return { status: 'refused', code: r.code, ...(r.detail ? { detail: r.detail } : {}) };
+      if (!r.ok) return { status: 'refused', code: r.code, ...('params' in r ? { params: r.params } : {}), ...(r.detail ? { detail: r.detail } : {}) };
       const { ok: _ok, status: result, ...rest } = r;
       return { status: 'ok', result, ...rest };
     },

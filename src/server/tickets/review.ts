@@ -1,4 +1,5 @@
 import type { Translate } from '../../shared/i18n';
+import { afterGate, type AfterRefusal } from './after-gate';
 import { git } from '../git/git';
 import { changedFiles } from '../git/merge';
 import { buildReport, isDocFile, writeReport, type ChangedFile } from './report';
@@ -42,6 +43,8 @@ export interface ReportFacts {
   docsChanged: boolean;
   /** Changed files that look unrelated to the goal (lock files, build output, logs) and are not named in it. */
   foreignHints: string[];
+  /** The agent this ticket was started after and where its ticket is (`missing` when it is gone): this one waits for its merge. */
+  after?: { name: string; status: string };
 }
 
 export type TicketReportResult =
@@ -54,7 +57,9 @@ export type RequestReviewResult =
   | { ok: true; status: 'in_review'; reviewer: string; round: number }
   | { ok: true; status: 'sent_back'; round: number }
   | { ok: true; status: 'needs_user' }
-  | { ok: false; code: 'spawn_failed' | Extract<TicketReportResult, { ok: false }>['code']; detail?: string };
+  | { ok: false; code: 'spawn_failed' | Extract<TicketReportResult, { ok: false }>['code']; detail?: string }
+  /** Started after another agent whose ticket is not merged yet (`spawn_agent after`). */
+  | { ok: false; code: AfterRefusal['code']; params: AfterRefusal['params']; detail?: undefined };
 
 export type VerdictResult =
   | { ok: true; ticket: string; outcome: 'approved' }
@@ -179,6 +184,7 @@ export class ReviewService {
       facts: {
         files, testsOk: tests?.ok, ...(inhibited ? { testsInhibited: true as const } : {}), checklistComplete: ticket.steps.length > 0 && ticket.steps.every((s) => s.done),
         docsChanged: files.some((f) => isDocFile(f.path)), foreignHints,
+        ...(ticket.after !== undefined ? { after: { name: ticket.after, status: this.d.tickets.get(ticket.after)?.status ?? 'missing' } } : {}),
       },
     };
   }
@@ -191,6 +197,9 @@ export class ReviewService {
     return this.queue.run(slug, async () => {
       const ticket = this.d.tickets.get(slug);
       if (!ticket || ticket.status !== 'delivered' || !ticket.deliveredSha) return { ok: false, code: 'not_delivered' };
+      // A ticket started after another one is reviewed only once that one is merged (SPEC 15.4): before the tests, which cost time.
+      const waiting = await afterGate(this.d, ticket);
+      if (waiting) return { ok: false, code: waiting.code, params: waiting.params };
       const report = await this.ticketReport(slug);
       if (!report.ok) return { ok: false, code: report.code, detail: report.detail };
       const sha = ticket.deliveredSha;

@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { Context } from '../http';
 import { buildClaudeLaunch, SESSION_ID_RE } from '../claude-code/launch';
 import { hasGitignore } from '../git/gitignore';
 import { helperToolsText } from '../helper-tools';
 import { loadProfile, renderAgentPrompt, type Profile } from '../profiles';
 import { validateSlug } from '../../shared/slug';
-import { checkSpawnable, createAgentWorktree, createReviewWorktree, discardAgentWorktree, GitError, removeWorktree, worktreesDirFor } from '../git/worktree';
+import { git } from '../git/git';
+import { agentBranchFor, checkSpawnable, createAgentWorktree, createReviewWorktree, discardAgentWorktree, GitError, removeWorktree, worktreesDirFor } from '../git/worktree';
 import { installPushHook } from '../git/hooks';
 import { repoPathOf, resolveRepo } from '../git/repos';
 import type { SpawnRequest } from './scheduler';
@@ -84,9 +85,16 @@ export async function spawnAgent(ctx: Context, r: SpawnRequest): Promise<SpawnOu
         : repo.code === 'git.unknownRepo' ? { repo: r.repo ?? '', repos: repo.repos.join(', ') } : undefined);
     }
     request.repo = repo.rel;
+    if (r.after !== undefined) {
+      const bad = await checkAfter(ctx, v.slug, r.after, repo.path);
+      if (bad) return bad;
+    }
     await ctx.prepareRepo(repo.path);
     const problem = await checkSpawnable({ repo: repo.path, project: ctx.projectName, slug: v.slug, dir: worktreesDirFor(ctx.projectRoot, repo.path), review: Boolean(detachedOf(r)) });
     if (problem) return refuse(422, problem);
+  } else if (r.after !== undefined) {
+    const bad = await checkAfter(ctx, v.slug, r.after, undefined); // agents share the project folder: there is no branch to start from
+    if (bad) return bad;
   }
   try {
     ctx.store.addAgent({ slug: v.slug, profile: r.profile, ...(request.model ? { model: request.model } : {}) }); // reserves the name, also while it waits in the queue
@@ -100,6 +108,8 @@ export async function spawnAgent(ctx: Context, r: SpawnRequest): Promise<SpawnOu
     if (r.goal && roleOf(r) === 'agent' && !r.resumeBranch) ctx.tickets.setGoal(v.slug, r.goal);
     // The review, the merge and the release find the repository again from the ticket.
     if (ctx.git.worktrees && request.repo !== undefined && roleOf(r) === 'agent' && !r.resumeBranch) ctx.tickets.setRepo(v.slug, request.repo);
+    // The review and the merge wait for the other ticket (SPEC 15.4); a restart finds the dependency again on the ticket.
+    if (r.after !== undefined && roleOf(r) === 'agent' && !r.resumeBranch) ctx.tickets.setAfter(v.slug, r.after);
     const result = ctx.scheduler.request(request);
     ctx.broadcastState();
     if (result.status === 'started' && result.ready) await result.ready;
@@ -112,6 +122,35 @@ export async function spawnAgent(ctx: Context, r: SpawnRequest): Promise<SpawnOu
     if (e instanceof GitError && e.code !== 'git.failed') return refuse(422, e.code);
     return refuse(500, 'agent.spawnFailed', { reason: errorMessage(e) });
   }
+}
+
+const samePath = (a: string, b: string): boolean => resolve(a).toLowerCase() === resolve(b).toLowerCase();
+
+/**
+ * `spawn_agent after`: the other agent must be a started agent (role `agent`, not a reviewer or a recovery) of the same repository,
+ * with its branch in git. Checked before the name is reserved, so a refusal leaves nothing behind. `repo` is undefined with worktrees off.
+ */
+async function checkAfter(ctx: Context, slug: string, after: string, repo: string | undefined): Promise<SpawnOutcome | undefined> {
+  if (after === slug) return refuse(422, 'after_self', { after });
+  const other = ctx.registry.get(after);
+  if (!other) return refuse(422, 'after_unknown', { after });
+  if (other.role !== 'agent') return refuse(422, 'after_not_agent', { after });
+  const g = other.git;
+  if (!g || repo === undefined) return refuse(422, 'after_no_branch', { after });
+  if (!samePath(g.repo ?? ctx.projectRoot, repo)) return refuse(422, 'after_other_repo', { after });
+  if ((await git(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${g.branch}`])).code !== 0) return refuse(422, 'after_no_branch', { after });
+  return undefined;
+}
+
+/**
+ * Where a new agent's branch starts: the other agent's branch for `after`, else the project branch (undefined). An `after` agent whose
+ * ticket was merged meanwhile (the request waited in the queue) has its work on the project branch, and its branch may be gone.
+ */
+function startPointOf(ctx: Context, r: SpawnRequest): string | undefined {
+  if (r.after === undefined || r.resumeBranch !== undefined || detachedOf(r)) return undefined;
+  const status = ctx.tickets.get(r.after)?.status;
+  if (status === 'merged' || status === 'released') return undefined;
+  return ctx.registry.get(r.after)?.git?.branch ?? agentBranchFor(ctx.projectName, r.after);
 }
 
 /**
@@ -143,9 +182,10 @@ async function startInWorktree(ctx: Context, r: SpawnRequest, profile: Profile, 
     // A reviewer reads a detached checkout of the delivered commit, a recovery one of the WIP commit; their nominal branch exists
     // nowhere, so the push hook refuses everything. A replacement agent checks out the stopped agent's branch.
     const detached = detachedOf(r);
+    const startPoint = startPointOf(ctx, r);
     made = detached
       ? { path: (await createReviewWorktree({ repo, slug: r.slug, sha: detached.sha, dir })).path, branch: `${detached.prefix}/${r.slug}` }
-      : await createAgentWorktree({ repo, project: ctx.projectName, slug: r.slug, dir, ...(r.resumeBranch ? { branch: r.resumeBranch } : {}) });
+      : await createAgentWorktree({ repo, project: ctx.projectName, slug: r.slug, dir, ...(r.resumeBranch ? { branch: r.resumeBranch } : {}), ...(startPoint ? { startPoint } : {}) });
     await installPushHook({ repo, worktree: made.path, branch: made.branch, slug: r.slug });
     await ctx.afterWorktreeCreated?.(r.slug);
     ctx.registry.setGit(r.slug, { worktree: made.path, branch: made.branch, repo });

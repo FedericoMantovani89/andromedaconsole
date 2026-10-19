@@ -43,6 +43,8 @@ export interface Ticket {
   handover?: string;
   /** The repository the agent works in, relative to the project folder; absent means the project folder itself. */
   repo?: string;
+  /** The agent this ticket was started after (`spawn_agent after`): it is not reviewed or merged before that agent's ticket is merged. */
+  after?: string;
   /** The central full run on the merged project branch (`CentralRun`): the tip it passed on, or where it turned red and blamed this ticket. */
   central?: CentralMark;
 }
@@ -127,6 +129,10 @@ export class TicketStore {
 
   setRepo(slug: string, repo: string): Ticket {
     return this.save({ ...this.ensure(slug), repo });
+  }
+
+  setAfter(slug: string, after: string): Ticket {
+    return this.save({ ...this.ensure(slug), after });
   }
 
   setCentral(slug: string, central: CentralMark): Ticket {

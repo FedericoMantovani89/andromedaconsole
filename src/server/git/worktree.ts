@@ -135,10 +135,10 @@ export async function removeWorktree(repo: string, path: string): Promise<void> 
 }
 
 /**
- * agent/<project>/<slug> from the project branch, in <repo>.worktrees/<slug> (SPEC 9.2). Refuses an existing folder or branch;
+ * agent/<project>/<slug> from the project branch (or from `startPoint`), in <repo>.worktrees/<slug> (SPEC 9.2). Refuses an existing folder or branch;
  * anything it created is removed again if a later step fails.
  */
-export function createAgentWorktree(o: { repo: string; project: string; slug: string; dir?: string; /** an existing branch to check out instead of a new one */ branch?: string }): Promise<{ path: string; branch: string }> {
+export function createAgentWorktree(o: { repo: string; project: string; slug: string; dir?: string; /** an existing branch to check out instead of a new one */ branch?: string; /** the branch the new one starts from (default the project branch) */ startPoint?: string }): Promise<{ path: string; branch: string }> {
   return withRepoLock(o.repo, () => (o.branch === undefined ? createAgentWorktreeUnlocked(o) : resumeBranchWorktreeUnlocked({ ...o, branch: o.branch })));
 }
 
@@ -148,7 +148,7 @@ export function createAgentWorktree(o: { repo: string; project: string; slug: st
  */
 async function resumeBranchWorktreeUnlocked(o: { repo: string; project: string; slug: string; dir?: string; branch: string }): Promise<{ path: string; branch: string }> {
   if (!SLUG_RE.test(o.slug)) throw new GitError('git.badName', `invalid slug ${o.slug}`);
-  if (!/^[A-Za-z0-9._/-]+$/.test(o.branch) || o.branch.startsWith('-')) throw new GitError('git.badName', `invalid branch ${o.branch}`);
+  if (!isBranchName(o.branch)) throw new GitError('git.badName', `invalid branch ${o.branch}`);
   const path = worktreePathFor(o.repo, o.slug, o.dir);
   if (existsSync(path)) throw new GitError('git.worktreeExists', `folder ${path} already exists`);
   if ((await git(o.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${o.branch}`])).code !== 0) throw new GitError('git.failed', `branch ${o.branch} does not exist`);
@@ -157,9 +157,18 @@ async function resumeBranchWorktreeUnlocked(o: { repo: string; project: string; 
   return { path, branch: o.branch };
 }
 
-async function createAgentWorktreeUnlocked(o: { repo: string; project: string; slug: string; dir?: string }): Promise<{ path: string; branch: string }> {
+/** A branch name the console may pass to git as an argument (no option, no odd characters). */
+const isBranchName = (b: string): boolean => /^[A-Za-z0-9._/-]+$/.test(b) && !b.startsWith('-');
+
+async function createAgentWorktreeUnlocked(o: { repo: string; project: string; slug: string; dir?: string; startPoint?: string }): Promise<{ path: string; branch: string }> {
   if (!SLUG_RE.test(o.slug)) throw new GitError('git.badName', `invalid slug ${o.slug}`);
+  if (o.startPoint !== undefined && !isBranchName(o.startPoint)) throw new GitError('git.badName', `invalid branch ${o.startPoint}`);
   const project = await ensureProjectBranchUnlocked(o.repo, o.project);
+  // An agent started after another one (`spawn_agent after`) branches from that agent's branch, so it sees its committed work.
+  const from = o.startPoint ?? project.branch;
+  if (o.startPoint !== undefined && (await git(o.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${o.startPoint}`])).code !== 0) {
+    throw new GitError('git.failed', `branch ${o.startPoint} does not exist`);
+  }
   const branch = agentBranchFor(o.project, o.slug);
   const path = worktreePathFor(o.repo, o.slug, o.dir);
   if (existsSync(path)) throw new GitError('git.worktreeExists', `folder ${path} already exists`);
@@ -167,7 +176,7 @@ async function createAgentWorktreeUnlocked(o: { repo: string; project: string; s
     throw new GitError('git.worktreeExists', `branch ${branch} already exists`);
   }
   const undo = (): Promise<unknown> => git(o.repo, ['branch', '-D', branch]);
-  await addWorktree(o.repo, path, ['-b', branch, fwd(path), project.branch], undo);
+  await addWorktree(o.repo, path, ['-b', branch, fwd(path), from], undo);
   await excludeOrRollback(o.repo, path, undo);
   return { path, branch };
 }

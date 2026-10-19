@@ -19,6 +19,8 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
   const ptys = k.get('ptys');
   const store = k.get('store');
   const broadcast = k.get('broadcast');
+  const tickets = k.get('tickets');
+  const afterOf = (slug: string): string | undefined => { try { return tickets.get(slug)?.after; } catch { return undefined; } };
   return {
     list_agents: async (caller) => {
       // The main also sees what only it can settle (escalated requests, questions to it): a restart or a lost message forgets nothing.
@@ -32,6 +34,8 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
           ...(a.state === 'queued' ? { queuedPosition: scheduler.position(a.slug) } : {}),
           // Where the ticket is when it is not simply being written (suspended, delivered...): the main decides what to resume from it.
           ...(() => { const t = a.role === 'agent' ? ticketStatusOf(a.slug) : undefined; return t && t !== 'in_progress' ? { ticket: t } : {}; })(),
+          // The agent it was started after: the main knows this ticket waits for that one to be merged.
+          ...(() => { const after = a.role === 'agent' ? afterOf(a.slug) : undefined; return after ? { after } : {}; })(),
         })),
         ...(held.length > 0 ? { requests: held } : {}),
         ...(pendingRelease ? { release: { id: pendingRelease.id, status: 'pending' as const } } : {}),
@@ -66,7 +70,12 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
       if (b.budget !== undefined && !(typeof b.budget === 'number' && Number.isInteger(b.budget) && b.budget >= 1000 && b.budget <= 100_000_000)) {
         return badRequest('budget must be a whole number between 1000 and 100000000');
       }
-      const out = await spawnAgent(k.get('ctx'), { slug: b.name, profile: b.profile, goal: b.goal, model: typeof b.model === 'string' ? b.model : undefined, source: 'main', ...(b.budget !== undefined ? { budget: b.budget as number } : {}), ...(typeof b.repo === 'string' ? { repo: b.repo } : {}) });
+      // An optional other agent this one starts after (its branch, and its ticket merged before this one is reviewed or merged).
+      if (b.after !== undefined && (typeof b.after !== 'string' || b.after === '')) return badRequest('after must be the name of another agent');
+      const out = await spawnAgent(k.get('ctx'), {
+        slug: b.name, profile: b.profile, goal: b.goal, model: typeof b.model === 'string' ? b.model : undefined, source: 'main',
+        ...(b.budget !== undefined ? { budget: b.budget as number } : {}), ...(typeof b.repo === 'string' ? { repo: b.repo } : {}), ...(typeof b.after === 'string' ? { after: b.after } : {}),
+      });
       if (!out.ok) return { status: 'error', code: out.code, ...(out.params ? { params: out.params } : {}) };
       return out.status === 'started' ? { status: 'started', name: out.slug } : { status: 'queued', name: out.slug, position: out.position };
     },

@@ -22,6 +22,11 @@ export interface SpawnRequest {
   budget?: number;
   /** The git repository the agent works in, relative to the project folder (`''`: the project folder itself). `spawnAgent` fills it in. */
   repo?: string;
+  /**
+   * Another agent of the same repository this one depends on (`spawn_agent after`): the new branch starts from that agent's branch,
+   * so its committed work is there, and this ticket is not reviewed or merged before that one is merged.
+   */
+  after?: string;
 }
 
 /** `ready` is present when the start is asynchronous (it creates a worktree first): it rejects if the start fails. */

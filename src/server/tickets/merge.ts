@@ -7,6 +7,7 @@ import { git } from '../git/git';
 import { worktreesDirFor } from '../git/worktree';
 import { changedFiles, ensureProjectWorktree, mergeIntoProject, resetTo, startMergeForAuthor, withProjectLock } from '../git/merge';
 import { commonDir, removeWorktree } from '../git/worktree';
+import { afterGate, type AfterRefusal } from './after-gate';
 import { boundedWait } from './bounded-wait';
 import { squashMessage } from './report';
 import type { TicketStore } from './store';
@@ -49,6 +50,8 @@ export type MergeResult =
   | { status: 'conflict'; files: string[] }
   | { status: 'tests_failed'; tail: string }
   | { status: 'refused'; code: 'not_approved' | 'no_worktree' | 'author_moved' | 'project_branch_checked_out' | 'git_failed'; detail?: string }
+  /** Started after another agent whose ticket is not merged yet (`spawn_agent after`): refused at once, no job is started. */
+  | { status: 'refused'; code: AfterRefusal['code']; params: AfterRefusal['params'] }
   /** The bounded wait ended before the merge did: the merge goes on, ask again. */
   | { status: 'running' };
 
@@ -73,8 +76,29 @@ export class MergeService {
    * `merged` with its sha from the ticket itself, without git (so it is also true after a restart).
    */
   mergeTicket(slug: string, opts: { waitMs?: number } = {}): Promise<MergeResult> {
-    const job = this.jobs.get(slug) ?? this.answered(slug) ?? this.start(slug);
+    const job = this.jobs.get(slug) ?? this.answered(slug) ?? this.gated(slug);
     return opts.waitMs === undefined ? job : boundedWait(job, opts.waitMs, (): MergeResult => ({ status: 'running' }));
+  }
+
+  /**
+   * A ticket started after another one waits for that one's merge (SPEC 15.4): the gate answers before any job starts, so a refusal
+   * never queues behind other merges. While the gate is checked the call stands as the ticket's job, so a second call joins it.
+   */
+  private gated(slug: string): Promise<MergeResult> {
+    const ticket = this.d.tickets.get(slug);
+    if (ticket?.after === undefined) return this.start(slug);
+    const pending: Promise<MergeResult> = afterGate(this.d, ticket).then(
+      (refused): MergeResult | Promise<MergeResult> => {
+        if (this.jobs.get(slug) === pending) this.jobs.delete(slug);
+        return refused ? { status: 'refused', code: refused.code, params: refused.params } : this.start(slug);
+      },
+      (e: unknown): MergeResult => {
+        if (this.jobs.get(slug) === pending) this.jobs.delete(slug);
+        return { status: 'refused', code: 'git_failed', detail: errorMessage(e) }; // the gate could not be checked: never merge past it
+      },
+    );
+    this.jobs.set(slug, pending);
+    return pending;
   }
 
   /** Merges asked for and not finished yet (running or waiting for their turn). */
