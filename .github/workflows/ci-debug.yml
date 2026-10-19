@@ -1,0 +1,51 @@
+# A manual diagnostic, not part of the checks: runs only test/test-commands.test.ts and test/list-agents.test.ts on the Windows runner, as
+# the full suite does (2 workers, the runner's temp folder), and every 20 seconds lists the git, node and npm processes with their
+# command lines, so a test that hangs shows what it is waiting for. Start it from the Actions tab (workflow_dispatch).
+name: ci-debug
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  hang:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the UI
+        run: npm run build
+
+      - name: The two files, with a process list every 20 seconds
+        shell: bash
+        run: |
+          npx vitest run --maxWorkers=2 --reporter=verbose test/test-commands.test.ts test/list-agents.test.ts > vitest.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 30); do
+            kill -0 $pid 2>/dev/null || break
+            sleep 20
+            echo "=== $(date -u +%T) processes ==="
+            powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -match 'git|node|npm|cmd|powershell' } | Select-Object ProcessId,ParentProcessId,Name,@{n='Cmd';e={ \$_.CommandLine.Substring(0,[Math]::Min(200,\$_.CommandLine.Length)) }} | Format-List"
+            echo "=== $(date -u +%T) vitest log tail ==="
+            tail -n 5 vitest.log
+          done
+          wait $pid; code=$?
+          echo "=== vitest exit $code ==="
+          cat vitest.log
+          exit $code
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
