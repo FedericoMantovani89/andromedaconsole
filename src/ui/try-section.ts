@@ -72,7 +72,8 @@ export function renderTryCheckouts(state: StateMessage | undefined, getState: ()
     busy(true);
     void api<TryCheckout[] | ApiError>('/api/project/try', { method: 'POST' }).then((res) => {
       busy(false);
-      if (fail(res)) return;
+      // A refusal halfway may have made or moved some checkouts: show what the state knows now.
+      if (fail(res)) { render(getState()?.project.tryCheckouts ?? []); return; }
       if (Array.isArray(res.body)) render(res.body);
     });
   });
@@ -80,7 +81,7 @@ export function renderTryCheckouts(state: StateMessage | undefined, getState: ()
     busy(true);
     void api<TryCheckout[] | ApiError>('/api/project/try', { method: 'DELETE' }).then((res) => {
       busy(false);
-      if (fail(res)) return;
+      if (fail(res)) { render(getState()?.project.tryCheckouts ?? []); return; }
       render([]);
     });
   }

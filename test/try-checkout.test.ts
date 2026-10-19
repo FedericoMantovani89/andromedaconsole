@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { discoverRepos, repoPathOf } from '../src/server/git/repos';
 import { listTryCheckouts, prepareTryCheckouts, removeTryCheckouts } from '../src/server/git/try-checkout';
@@ -79,7 +79,97 @@ describe('prepareTryCheckouts', () => {
   });
 });
 
+describe('prepareTryCheckouts, edge cases', () => {
+  /** A single-repo project with the project branch, a try checkout prepared, and a tracked edit in the user's own checkout. */
+  async function preparedWithUserEdit(): Promise<{ repo: string; path: string; head: string }> {
+    const { repo } = makeRepo();
+    gitSync(repo, 'branch', 'project/shop', 'main');
+    const [c] = await prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) });
+    writeFileSync(join(repo, 'README.md'), 'my own edit\n');
+    commitOnProjectBranch(repo, 'shop', 'later.txt', 'later\n');
+    return { repo, path: c!.path, head: gitSync(repo, 'rev-parse', 'HEAD') };
+  }
+  const userUntouched = (repo: string, head: string): void => {
+    expect(gitSync(repo, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
+    expect(gitSync(repo, 'rev-parse', 'HEAD')).toBe(head);
+    expect(readFileSync(join(repo, 'README.md'), 'utf8')).toBe('my own edit\n');
+    expect(existsSync(join(repo, 'later.txt'))).toBe(false);
+  };
+
+  it('a try checkout whose .git was removed by hand is refused as a folder in the way, and the user checkout is untouched', async () => {
+    const { repo, path, head } = await preparedWithUserEdit();
+    rmSync(join(path, '.git'));
+    await expect(prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) })).rejects.toMatchObject({ code: 'try.folderTaken', params: { path } });
+    userUntouched(repo, head);
+  });
+
+  it('a try checkout whose .git is broken (still registered) is refused under the lock, before any checkout, and the user checkout is untouched', async () => {
+    const { repo, path, head } = await preparedWithUserEdit();
+    rmSync(join(path, '.git')); // git marks it hidden on Windows, where writing over a hidden file is refused
+    writeFileSync(join(path, '.git'), 'gitdir: ./nowhere\n');
+    await expect(prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) })).rejects.toMatchObject({ code: 'try.folderTaken', params: { path } });
+    userUntouched(repo, head);
+  });
+
+  it('a folder git does not know at the target path is refused with try.folderTaken and left as it is', async () => {
+    const { repo } = makeRepo();
+    gitSync(repo, 'branch', 'project/shop', 'main');
+    const path = join(repo, '.andromedaconsole', 'try', 'repo');
+    mkdirSync(path, { recursive: true });
+    writeFileSync(join(path, 'mine.txt'), 'mine\n');
+    await expect(prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) })).rejects.toMatchObject({ code: 'try.folderTaken', params: { path } });
+    expect(readFileSync(join(path, 'mine.txt'), 'utf8')).toBe('mine\n');
+    expect(worktreeCount(repo)).toBe(1);
+  });
+
+  it('a registered checkout deleted by hand is made again by the next prepare', async () => {
+    const { repo } = makeRepo();
+    gitSync(repo, 'branch', 'project/shop', 'main');
+    const [c] = await prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) });
+    rmSync(c!.path, { recursive: true, force: true });
+    const again = await prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) });
+    expect(again).toEqual([c]);
+    expect(existsSync(join(c!.path, 'README.md'))).toBe(true);
+    expect(worktreeCount(repo)).toBe(2);
+  });
+
+  it('refuses everything when a repo after the first has no project branch: nothing is created for the first', async () => {
+    const m = makeMultiRepo(['abc-be', 'abc-fe']);
+    gitSync(m.repos['abc-be']!.repo, 'branch', 'project/shop', 'main');
+    await expect(prepareTryCheckouts({ projectRoot: m.root, project: 'shop', repos: reposOf(m.root) })).rejects.toMatchObject({ code: 'try.noProjectBranch', params: { repo: 'abc-fe' } });
+    expect(existsSync(join(m.root, '.andromedaconsole', 'try'))).toBe(false);
+    expect(worktreeCount(m.repos['abc-be']!.repo)).toBe(1);
+  });
+
+  it('a refresh throws away an edit of a tracked file in the try checkout and keeps an untracked one', async () => {
+    const { repo } = makeRepo();
+    gitSync(repo, 'branch', 'project/shop', 'main');
+    const [c] = await prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) });
+    writeFileSync(join(c!.path, 'README.md'), 'edited in the try\n');
+    writeFileSync(join(c!.path, 'build-output.txt'), 'built\n');
+    const tip = commitOnProjectBranch(repo, 'shop', 'later.txt', 'later\n');
+    const [moved] = await prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) });
+    expect(moved!.sha).toBe(tip);
+    expect(readFileSync(join(c!.path, 'README.md'), 'utf8')).toBe('hello\n');
+    expect(readFileSync(join(c!.path, 'build-output.txt'), 'utf8')).toBe('built\n');
+    expect(existsSync(join(c!.path, 'later.txt'))).toBe(true);
+  });
+});
+
 describe('removeTryCheckouts', () => {
+  it('leaves a folder of the user inside try/ alone (and try/ with it)', async () => {
+    const { repo } = makeRepo();
+    gitSync(repo, 'branch', 'project/shop', 'main');
+    await prepareTryCheckouts({ projectRoot: repo, project: 'shop', repos: reposOf(repo) });
+    const mine = join(repo, '.andromedaconsole', 'try', 'notes');
+    mkdirSync(mine);
+    writeFileSync(join(mine, 'n.txt'), 'n\n');
+    await removeTryCheckouts({ projectRoot: repo, repos: reposOf(repo) });
+    expect(readFileSync(join(mine, 'n.txt'), 'utf8')).toBe('n\n');
+    expect(existsSync(join(repo, '.andromedaconsole', 'try', 'repo'))).toBe(false);
+    expect(worktreeCount(repo)).toBe(1);
+  });
+
   it('removes the folders and their worktree registrations, and is safe to repeat', async () => {
     const m = makeMultiRepo(['abc-be', 'abc-fe']);
     for (const r of Object.values(m.repos)) gitSync(r.repo, 'branch', 'project/shop', 'main');

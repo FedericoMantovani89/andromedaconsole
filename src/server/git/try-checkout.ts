@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, rmdirSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { git } from './git';
-import { excludeConsoleFolder, withRepoLock } from './worktree';
+import { commonDir, excludeConsoleFolder, withRepoLock } from './worktree';
 import { KeyedQueue } from '../keyed-queue';
 import { canonicalFolder } from '../canonical-path';
 
@@ -48,6 +48,24 @@ async function registered(repo: string): Promise<Registered[]> {
   });
 }
 
+/** Git looks for a repository in the folder itself and never above it. */
+const ceilingAt = (path: string): Record<string, string> => ({ GIT_CEILING_DIRECTORIES: dirname(resolve(path)) });
+
+/**
+ * The git dir of the worktree in `path` when `path` is itself a worktree of `repo` (its top level is exactly `path` and it shares the repo's
+ * common dir); undefined otherwise (a missing or broken `.git`, another repository).
+ */
+async function ownGitDir(repo: string, path: string): Promise<string | undefined> {
+  const env = ceilingAt(path);
+  const top = await git(path, ['rev-parse', '--show-toplevel'], { env });
+  if (top.code !== 0 || !same(top.stdout.trim(), path)) return undefined;
+  const dirs = await git(path, ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'], { env });
+  const [gitDir, common] = dirs.stdout.split(/\r?\n/).map((l) => l.trim());
+  if (dirs.code !== 0 || !gitDir || !common) return undefined;
+  try { if (!same(common, await commonDir(repo))) return undefined; } catch { return undefined; }
+  return gitDir;
+}
+
 /** The try checkouts git has registered (read from git, so a restarted console finds them); `[]` when there is none. Never throws. */
 export async function listTryCheckouts(o: { projectRoot: string; repos: TryRepo[] }): Promise<TryCheckout[]> {
   if (!existsSync(tryDirFor(o.projectRoot))) return []; // the usual case: no git call at all
@@ -86,12 +104,21 @@ export function prepareTryCheckouts(o: { projectRoot: string; project: string; r
     for (const step of plan) {
       await withRepoLock(step.repo.path, async () => {
         if (step.exists) {
-          const moved = await git(step.path, ['checkout', '-q', '--force', '--detach', step.sha]);
+          // A forced checkout must reach this folder's own worktree and nothing else: with its `.git` gone or broken git would walk up to
+          // the user's checkout (a single-repo project keeps `try/repo` inside it) and force that one. Checked under the lock, right before.
+          const gitDir = await ownGitDir(step.repo.path, step.path);
+          if (gitDir === undefined) throw new TryError('try.folderTaken', { path: step.path });
+          const moved = await git(step.path, [`--git-dir=${fwd(gitDir)}`, `--work-tree=${fwd(step.path)}`, 'checkout', '-q', '--force', '--detach', step.sha], { env: ceilingAt(step.path) });
           if (moved.code !== 0) throw new TryError('try.failed', { reason: moved.stderr.trim() });
         } else {
           mkdirSync(tryDirFor(o.projectRoot), { recursive: true });
           const added = await git(step.repo.path, ['worktree', 'add', '-q', '--detach', fwd(step.path), step.sha]);
-          if (added.code !== 0) throw new TryError('try.failed', { reason: added.stderr.trim() });
+          if (added.code !== 0) {
+            // What a failed add left is undone through git, as `addWorktree` does, never by deleting the folder.
+            await git(step.repo.path, ['worktree', 'remove', '--force', fwd(step.path)]);
+            await git(step.repo.path, ['worktree', 'prune']);
+            throw new TryError('try.failed', { reason: added.stderr.trim() });
+          }
           await excludeConsoleFolder(step.repo.path).catch(() => undefined); // already done when the project opened; cosmetic otherwise
         }
       });

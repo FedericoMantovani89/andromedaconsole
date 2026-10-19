@@ -159,13 +159,16 @@ describe('options dialog', () => {
   });
   it('the try section starts from the checkouts in the state, shows a refusal translated, and is not built for a folder with no repository', async () => {
     const ready = { ...state, projectIsRepo: true, repos: [''], project: { name: 'p', repos: [], tryCheckouts: [tryList[0]] }, prereq: [{ id: 'git', status: 'ok', version: '2.50', required: true }] } as unknown as StateMessage;
-    await openOptions(() => ready, 'git');
+    let now = ready;
+    await openOptions(() => now, 'git');
     await flush();
     expect([...document.querySelectorAll<HTMLInputElement>('input[name="tryPath"]')].map((i) => i.value)).toEqual([tryList[0]!.path]);
     tryStatus = 409;
+    now = { ...ready, project: { ...ready.project, tryCheckouts: tryList } } as unknown as StateMessage; // a refusal halfway: one more was made
     document.querySelector<HTMLButtonElement>('button[name="tryPrepare"]')!.click();
     await flush();
     expect(document.querySelector('.options-dialog .form-error')!.textContent).not.toBe('');
+    expect([...document.querySelectorAll<HTMLInputElement>('input[name="tryPath"]')].map((i) => i.value)).toEqual(tryList.map((c) => c.path)); // re-read from the state
     document.body.innerHTML = '<div id="overlay" hidden></div>';
     const none = { ...state, projectIsRepo: false, repos: [], prereq: [{ id: 'git', status: 'ok', version: '2.50', required: true }] } as unknown as StateMessage;
     await openOptions(() => none, 'git');
