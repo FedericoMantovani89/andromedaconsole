@@ -42,7 +42,7 @@ jobs:
             echo "=== $(date -u +%T) vitest log tail ==="
             tail -n 5 vitest.log
           done
-          wait $pid; code=$?
+          code=0; wait $pid || code=$?
           echo "=== vitest exit $code ==="
           cat vitest.log
           exit $code
