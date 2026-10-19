@@ -28,6 +28,7 @@ change that introduces the behaviour.
 - Tests: a static check fails if any source file writes to the user's Claude home (`~/.claude`, `CLAUDE_CONFIG_DIR`, `~/.claude.json`).
 
 ### Fixed
+- The three `try.*` errors of the try checkout are user-facing error codes, so the UI shows their own text.
 - A failed git call while keeping the project branch's files at a conflict is retried once and the path stays listed if it still fails; the author's message no longer claims conflict markers when none remain; a ticket rename that fails halfway puts the file and the dependents back; the Italian `report.after` wording; the unused `PROFILES` constant is gone.
 - When a ticket started after another agent conflicts at merge, the author's folder keeps the project branch's version of every file the ticket never touched (no conflict markers or stale copies of the other agent's files) and the author is told only the files it really shares; conflicting names that are not plain ASCII are read correctly, an older git (before 2.40) is named as the reason the squash cannot run, and the ticket report says which agent it was started after and why.
 - Refreshing a try checkout first checks, under the repository lock, that its folder is its own worktree of the repository (git never looks above it) and refuses with `try.folderTaken` otherwise, so a broken or missing `.git` there can never make the forced checkout reach the user's own checkout; a failed `git worktree add` is undone through git.

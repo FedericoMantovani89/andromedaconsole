@@ -8,6 +8,7 @@ import type { NotificationsConfig, ToastStatus } from './notify';
 export const USER_ERROR_CODES = [
   'slug.missing', 'slug.format', 'slug.length', 'slug.generic', 'slug.reserved', 'slug.duplicate',
   'profile.invalid', 'profile.fieldInvalid', 'profile.notFound', 'model.invalid', 'prereq.blocked', 'agent.spawnFailed',
+  'try.noProjectBranch', 'try.folderTaken', 'try.failed',
   'git.notRepo', 'git.alreadyRepo', 'git.noCommits', 'git.worktreeExists', 'project.testCommandInvalid', 'project.repoUnknown', 'project.repoUnknownNone', 'config.unreadable', 'review.useRequestReview', 'project.squashInvalid', 'recovery.useRecoveryTool',
   'folder.pickBusy', 'project.duplicate', 'project.badRoot', 'project.badName', 'project.notFound',
   'install.busy', 'install.unavailable',
