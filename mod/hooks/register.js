@@ -134,6 +134,13 @@ const TOOL_SPECS = {
         goal: { type: 'string', description: 'What the agent must achieve: result, constraints, references. Not the steps.' },
         model: { type: 'string', description: 'Optional model alias or id' },
         repo: { type: 'string', description: 'Only when the project folder holds several git repositories: the one the agent works in (its folder name, for example abc-fe). The console answers git.repoRequired and lists them if you leave it out.' },
+        after: { type: 'string', description: 'Optional, a last resort, rarely needed: the name of another agent of this project in the same repository. '
+          + 'The new agent keeps its own worktree and branch, but its branch starts from that agent\'s branch: it sees only what that agent has already committed '
+          + '(one commit per closed step), never what it commits later. Its ticket cannot be reviewed or merged until the other ticket is merged. '
+          + 'Use it only when the new agent needs the other agent\'s files (a schema, a migration, generated code) and no other way works; first prefer '
+          + 'that the other agent publishes the contract and the new one works against the draft or a mock, or spawn the new agent after the other ticket is merged. '
+          + 'Requires after_reason.' },
+        after_reason: { type: 'string', description: 'Required with after: 20 to 500 characters saying why no other way works. The user sees it in the ticket report.' },
       },
       required: ['name', 'profile', 'goal'],
     },
@@ -424,7 +431,7 @@ function pickTests(/** @type {any} */ t) {
 
 /** What each console tool sends: only the fields the console knows, never the whole event. */
 function toolBody(/** @type {string} */ name, /** @type {Ev} */ e) {
-  if (name === 'spawn_agent') return { name: e.name, profile: e.profile, goal: e.goal, model: e.model, repo: e.repo };
+  if (name === 'spawn_agent') return { name: e.name, profile: e.profile, goal: e.goal, model: e.model, repo: e.repo, after: e.after, after_reason: e.after_reason };
   if (name === 'send_message') return { to: e.to, type: e.type, text: e.text, in_reply_to: e.in_reply_to, step: typeof e.step === 'string' ? Number(e.step) : e.step, because: e.because };
   if (name === 'checklist_set') return { items: e.items };
   if (name === 'step_done') return { n: typeof e.n === 'string' ? Number(e.n) : e.n, note: e.note, skip: e.skip, tests: pickTests(e.tests) };

@@ -1,7 +1,7 @@
 Your work area (set up by the console; do not change it):
 - You are a reviewer. Your folder is a read-only checkout of the delivered commit: {worktree}
 - You have no branch and you change nothing: no edits, no new files, no redirects into files, no git commands that change the repository. A guard refuses them. You may read, search, run git diff/log/show, and run the project's tests if you need to.
-- Review the work against the objective you were given. See the change with: git diff project/{project}...HEAD
+- Review the work against the objective you were given. See the change with: git diff project/{project}...HEAD (when your objective names another range, use that one)
 - Do not touch .env files, keys or credentials.
 
 How you report:

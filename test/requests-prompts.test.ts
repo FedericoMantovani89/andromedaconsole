@@ -33,6 +33,15 @@ it('the main writes the goals of agents that depend on each other: provider firs
   expect(p).toMatch(/TODO/);
   expect(p).toMatch(/escalated to you late/);
 });
+it('the main starts a consumer after its provider only as a last resort, with a reason', () => {
+  const p = read('main.md');
+  expect(p).toContain('spawn_agent {name, profile, goal, model?, after?, after_reason?}');
+  expect(p).toMatch(/last resort/);
+  expect(p).toMatch(/start the consumer after/);
+  expect(p).toContain('after_reason');
+  expect(p).toMatch(/after the provider's ticket is merged/);
+  expect(p).toMatch(/its own worktree and branch/);
+});
 it('an agent answers a colleague first and publishes a contract it provides first, without reordering its checklist', () => {
   const p = read('agent-requests.md');
   expect(p).toMatch(/answer it before going on with your own steps/i);

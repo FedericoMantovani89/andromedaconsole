@@ -478,6 +478,48 @@ it('merge_ticket keeps asking while the console says "running" and returns the f
   expect(out).toEqual({ result: JSON.stringify({ status: 'merged', sha: 'abc' }) });
   expect(n).toBe(4);
 });
+it('spawn_agent offers after and after_reason as a last resort, and the spec says what the new agent sees', async () => {
+  const { find } = await loadMod();
+  const f = fake$();
+  const specs: Record<string, { description: string; inputSchema: any }> = {};
+  f.$.tool.register = async (spec: any) => { specs[spec.name] = spec; };
+  await find('session.start')(f.$, {}, next);
+  const props = specs.spawn_agent!.inputSchema.properties;
+  expect(specs.spawn_agent!.inputSchema.required).toEqual(['name', 'profile', 'goal']);
+  const after: string = props.after.description;
+  expect(props.after.type).toBe('string');
+  expect(after).toMatch(/last resort/i);
+  expect(after).toMatch(/same repository/i);
+  expect(after).toMatch(/already committed/);
+  expect(after).toMatch(/never what it commits later/);
+  expect(after).toMatch(/its own worktree and branch/);
+  expect(after).toMatch(/cannot be reviewed or merged until the other ticket is merged/);
+  expect(after).toContain('after_reason');
+  expect(props.after_reason.type).toBe('string');
+  expect(props.after_reason.description).toMatch(/20 to 500 characters/);
+  expect(props.after_reason.description).toMatch(/why no other way works/);
+});
+it('spawn_agent forwards after and after_reason, and a refusal reaches the main with its params and detail', async () => {
+  const { find } = await loadMod();
+  const bodies: Record<string, unknown> = {};
+  const answers: Record<string, unknown> = {
+    spawn_agent: { status: 'error', code: 'after_reason_required', detail: 'after_reason must be 20 to 500 characters saying why no other way works' },
+    merge_ticket: { status: 'error', code: 'after_not_merged', params: { after: 'orders-schema', status: 'review' }, detail: 'merge orders-schema first' },
+  };
+  const f = fake$({
+    fetch: (url, init) => {
+      const tool = url.split('/').pop()!;
+      if (url.includes('/v1/tools/')) { bodies[tool] = JSON.parse(init.body ?? '{}'); return { ok: true, text: JSON.stringify(answers[tool] ?? {}) }; }
+      return { ok: true, text: '{}' };
+    },
+  });
+  await find('session.start')(f.$, {}, next);
+  const spawned = await find('tool.call', 'mcp__console-mod__spawn_agent')(f.$, { name: 'orders-api', profile: 'developer', goal: 'g', after: 'orders-schema', after_reason: 'needs the migration files', extra: 1 });
+  expect(bodies.spawn_agent).toEqual({ name: 'orders-api', profile: 'developer', goal: 'g', after: 'orders-schema', after_reason: 'needs the migration files' });
+  expect(JSON.parse(spawned.result)).toEqual(answers.spawn_agent);
+  const merged = await find('tool.call', 'mcp__console-mod__merge_ticket')(f.$, { name: 'orders-api' });
+  expect(JSON.parse(merged.result)).toEqual(answers.merge_ticket);
+});
 it('merge_ticket with the console unreachable says the merge may still be running and to call it again', async () => {
   const { find } = await loadMod();
   const f = fake$({ fetch: (url) => (url.includes('/v1/tools/') ? new Error('ECONNREFUSED') : { ok: true, text: '{}' }) });
