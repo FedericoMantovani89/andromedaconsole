@@ -96,7 +96,7 @@ describe('buildReport', () => {
     expect(en.indexOf('Started after')).toBeGreaterThan(en.indexOf('## Objective'));
     expect(en.indexOf('Started after')).toBeLessThan(en.indexOf('## Checklist'));
     const itText = buildReport(base({ lang: 'it', t: translator('it'), after }));
-    expect(itText).toContain('Avviato dopo l\'agente dba-schema, sopra il suo lavoro. Perché: the API tests need the real migration ## Fake heading');
+    expect(itText).toContain('Avviato partendo dal lavoro dell\'agente dba-schema. Perché: the API tests need the real migration ## Fake heading');
     expect(itText).not.toContain('Started after');
     // no line without a dependency
     expect(buildReport(base())).not.toContain('Started after');
