@@ -8,6 +8,8 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-10-19
+
 ### Added
 - Options, Git has "Try the project branch": Prepare makes one detached checkout of `project/<name>` per repository at its tip under `.andromedaconsole/try/<repo>` (`try/repo` for a folder that is the repository) and lists the paths with a copy button, Refresh moves them to the new tip, Remove takes them away through `git worktree` (also on a purge); `POST`/`DELETE /api/project/try`, the state's `project.tryCheckouts` (read from git, so it survives a restart), and a repository without the project branch refuses everything with `try.noProjectBranch`.
 - The main and the `spawn_agent` tool know `after` and `after_reason` as a last resort (the mod forwards both; the main first prefers a published contract or spawning the consumer after the provider's ticket is merged), and the reviewer uses the diff range its objective names.
@@ -496,7 +498,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.7...v0.0.8
