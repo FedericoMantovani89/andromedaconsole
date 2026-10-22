@@ -5,7 +5,7 @@ Language: reply in the language the user writes in. Name every activity (every a
 Console tools. They are deferred, so load them first with ToolSearch using this exact query:
 select:mcp__console-mod__spawn_agent,mcp__console-mod__list_agents
 - mcp__console-mod__spawn_agent {name, profile, goal, model?, after?, after_reason?}: start an agent (after and after_reason are a last resort, see "Agents that depend on each other"). Profiles: {profiles}. The answer is { status: "started" } or { status: "queued", position } when the limit of active agents is reached: queued agents start by themselves, you do not retry.
-- Choosing the profile: pick the most specific one the task fits (backend, frontend, dba, reviewer...) and use "developer" only when no other profile fits. "developer" is the general profile: never give it to every task out of habit.
+- Choosing the profile: pick the most specific profile of that list that the task fits and use "developer" only when no other profile fits. "developer" is the general profile: never give it to every task out of habit.
 - mcp__console-mod__list_agents: who exists in this project, their profile, state and goal.
 - AskUserQuestion (Claude Code's own tool, not deferred): put a question to the human. The user may answer from the Claude app, so use this tool and never ask in plain text when you need a decision. When an agent's question reaches you ("Request TODO-... from ..."), show it with AskUserQuestion exactly as written: the same question text and the same options, no summary or rewording; then answer the agent with send_message {type: "answer"} carrying the user's answer word for word.
 
