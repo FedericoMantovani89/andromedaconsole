@@ -31,7 +31,9 @@ await page.goto(`${s.url}/?token=${s.token}`);
 const results: [string, boolean][] = [];
 const rec = (label: string, ok: boolean) => { results.push([label, ok]); console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); };
 
-rec('main shows the real Claude Code TUI', await until(async () => strip(await snap('smoke-run')).includes('Claude Code'), 60000));
+// The snapshot text has no spaces between the words of the banner ("ClaudeCodev2.1.308"), so the match ignores whitespace.
+const showsBanner = (t: string): boolean => strip(t).replace(/\s/g, '').includes('ClaudeCode');
+rec('main shows the real Claude Code TUI', await until(async () => showsBanner(await snap('smoke-run')), 60000));
 await sleep(3000);
 await page.keyboard.type('Reply with exactly the word console-ok and nothing else.');
 await page.keyboard.press('Enter');
@@ -46,7 +48,7 @@ await page.click('.new-agent-form button[type="submit"]');
 rec('"prova-della-console" is accepted and gets a panel', await until(async () => (await page.locator('.panel[data-slug="prova-della-console"]').count()) > 0, 10000));
 const ownerNow = () => page.evaluate(() => { const a = document.activeElement as HTMLElement | null; return a ? `${a.tagName}|${(a.closest('.panel') as HTMLElement | null)?.dataset.slug ?? 'none'}` : 'null'; });
 console.log(`INFO  active element right after the agent panel appeared: ${await ownerNow()}`);
-const tuiOk = await until(async () => strip(await snap('prova-della-console')).includes('Claude Code'), 60000);
+const tuiOk = await until(async () => showsBanner(await snap('prova-della-console')), 60000);
 rec('the new agent shows the real TUI', tuiOk);
 if (!tuiOk) console.log('INFO  agent snapshot tail: ' + JSON.stringify(strip(await snap('prova-della-console')).slice(-600)));
 const owner = await ownerNow();

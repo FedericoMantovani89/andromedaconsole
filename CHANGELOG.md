@@ -8,7 +8,10 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-10-22
+
 ### Changed
+- The real-Claude smoke (`test/e2e/real-claude-smoke.ts`) matches the banner without whitespace: the snapshot text has none (`ClaudeCodev2.1.308`).
 - UI: the galaxy icon is gone from the top bar; "+ project" is a bold "+"; the Settings icon is a real cog; Expand and Compact are chevron buttons; an agent's profile sits under its name.
 - The progress chip of an agent ("4/11") opens a dialog with the checklist it is keeping (`GET /api/agents/<slug>/checklist`).
 - The console no longer installs a `pre-push` hook in the user's repository (an old one of its own is removed); sessions it starts get deny rules for pushes of main and tags through `--settings` with a file under `.andromedaconsole`, so nothing is left behind in the repository or in `.claude`.
@@ -508,7 +511,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.11...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.12...HEAD
+[0.0.12]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.8...v0.0.9
