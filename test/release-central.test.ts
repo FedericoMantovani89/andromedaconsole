@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gitSync, makeRepo, removeDir, type TestRepo } from './git-helpers';
 import { ensureProjectWorktree } from '../src/server/git/merge';
-import { installReleaseHook } from '../src/server/git/release-hook';
 import { loadBundles } from '../src/server/i18n-bundles';
 import { createTranslator } from '../src/shared/i18n';
 import { TicketStore } from '../src/server/tickets/store';
@@ -15,7 +14,7 @@ vi.setConfig({ testTimeout: 90_000 });
 const bundles = loadBundles();
 let t: TestRepo;
 
-beforeEach(async () => { t = makeRepo({ remote: true }); await installReleaseHook(t.repo); });
+beforeEach(() => { t = makeRepo({ remote: true }); });
 afterEach(() => removeDir(t.base));
 
 async function merged(tickets: TicketStore): Promise<void> {

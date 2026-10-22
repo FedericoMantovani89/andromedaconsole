@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { gitSync, makeRepo, type TestRepo, removeDir } from './git-helpers';
 import { ensureProjectWorktree } from '../src/server/git/merge';
-import { installReleaseHook } from '../src/server/git/release-hook';
 import { loadBundles } from '../src/server/i18n-bundles';
 import { createTranslator } from '../src/shared/i18n';
 import { TicketStore } from '../src/server/tickets/store';
@@ -22,7 +21,6 @@ let asked: { text: string; payload: any; answer: (a: string) => void }[];
 
 beforeEach(async () => {
   t = makeRepo({ remote: true });
-  await installReleaseHook(t.repo);
   tickets = new TicketStore(t.repo);
   command = `node -e "process.exit(require('fs').existsSync('BAD') ? 1 : 0)"`;
   main = []; asked = [];

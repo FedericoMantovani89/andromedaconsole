@@ -3,7 +3,6 @@ import { writeFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gitSync, makeMultiRepo, removeDir, type MultiRepo } from './git-helpers';
 import { ensureProjectWorktree } from '../src/server/git/merge';
-import { installReleaseHook } from '../src/server/git/release-hook';
 import { loadBundles } from '../src/server/i18n-bundles';
 import { createTranslator } from '../src/shared/i18n';
 import { TicketStore } from '../src/server/tickets/store';
@@ -22,7 +21,6 @@ let asked: { text: string; payload: any; answer: (a: string) => void }[];
 
 beforeEach(async () => {
   m = makeMultiRepo(['abc-fe', 'abc-be'], { remote: true });
-  for (const r of Object.values(m.repos)) await installReleaseHook(r.repo);
   tickets = new TicketStore(m.root); // the project folder is NOT a repository
   main = []; asked = [];
   deps = {

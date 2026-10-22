@@ -11,6 +11,7 @@ change that introduces the behaviour.
 ### Changed
 - UI: the galaxy icon is gone from the top bar; "+ project" is a bold "+"; the Settings icon is a real cog; Expand and Compact are chevron buttons; an agent's profile sits under its name.
 - The progress chip of an agent ("4/11") opens a dialog with the checklist it is keeping (`GET /api/agents/<slug>/checklist`).
+- The console no longer installs a `pre-push` hook in the user's repository (an old one of its own is removed); sessions it starts get deny rules for pushes of main and tags through `--settings` with a file under `.andromedaconsole`, so nothing is left behind in the repository or in `.claude`.
 - Archived agents: the confirmation of "Archive all finished" and "Delete all" is a popup over the list, not a line at its end.
 - The main's prompt asks for the most specific profile and uses "developer" only when nothing else fits.
 

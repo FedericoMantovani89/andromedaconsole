@@ -6,7 +6,7 @@
 export const TESTED_CLAUDE_MAX = '2.1.300';
 
 /** Every command-line flag launch.ts can pass: `claude --help` must still list each one. */
-export const CLAUDE_FLAGS = ['--resume', '--name', '--model', '--plugin-dir', '--append-system-prompt-file', '--allowedTools', '--dangerously-skip-permissions'] as const;
+export const CLAUDE_FLAGS = ['--resume', '--name', '--model', '--plugin-dir', '--append-system-prompt-file', '--allowedTools', '--settings', '--dangerously-skip-permissions'] as const;
 
 /** Where Claude Code files a session: `<config dir>/projects/<working folder, non-alphanumerics as dashes>/<session id>.jsonl` (transcript.ts). */
 export const TRANSCRIPT_LAYOUT = 'projects/<encoded cwd>/<session id>.jsonl';

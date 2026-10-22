@@ -43,15 +43,13 @@ async function mergedTicket(s: Running, t: TestRepo, slug: string, file: string)
   expect((await modToolUntilEnd(s, 'shop-api', 'merge_ticket', { name: slug })).body.status).toBe('merged');
 }
 
-it('the main repository gets the pre-push hook at startup, and a plain push of main from the checkout is refused', async () => {
+it('the console puts no git hook in the user\'s repository: the user\'s own push of main goes through', async () => {
   const { s, t } = await boot();
-  expect(existsSync(join(t.repo, '.git', 'hooks', 'pre-push'))).toBe(true);
+  expect(existsSync(join(t.repo, '.git', 'hooks', 'pre-push'))).toBe(false);
   writeFileSync(join(t.repo, 'x.txt'), 'x');
   gitSync(t.repo, 'add', '-A');
   gitSync(t.repo, '-c', 'user.name=T', '-c', 'user.email=t@e.x', 'commit', '-q', '-m', 'local');
-  expect((await git(t.repo, ['push', 'origin', 'main'])).code).not.toBe(0);
-  expect((await git(t.repo, ['push', '--force', 'origin', 'main'])).code).not.toBe(0);
-  expect((await git(t.repo, ['push', 'origin', 'HEAD:main'])).code).not.toBe(0);
+  expect((await git(t.repo, ['push', 'origin', 'main'])).code).toBe(0);
   void s;
 });
 it('the main\'s own attempts to push main are refused by the guard, force or not', async () => {
@@ -95,10 +93,4 @@ it('a merged ticket becomes one confirmation in the queue; Reject touches nothin
   expect(gitSync(t.repo, 'rev-parse', 'main')).toBe(gitSync(t.repo, 'rev-parse', 'project/shop-api'));
   expect(existsSync(join(t.repo, 'login.js'))).toBe(true);
   await until(async () => (await inbox(s, 'shop-api')).join('\n').includes('released'), 10_000);
-  expect(existsSync(join(t.repo, '.git', 'console-hooks', 'release-token'))).toBe(false);
-  // and right afterwards the same plain push is refused again (the token is gone)
-  writeFileSync(join(t.repo, 'later.txt'), 'x');
-  gitSync(t.repo, 'add', '-A');
-  gitSync(t.repo, '-c', 'user.name=T', '-c', 'user.email=t@e.x', 'commit', '-q', '-m', 'later');
-  expect((await git(t.repo, ['push', 'origin', 'main'])).code).not.toBe(0);
 });

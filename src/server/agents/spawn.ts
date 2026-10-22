@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Context } from '../http';
 import { buildClaudeLaunch, SESSION_ID_RE } from '../claude-code/launch';
+import { writeSessionSettings } from '../claude-code/project-settings';
 import { hasGitignore } from '../git/gitignore';
 import { helperToolsText } from '../helper-tools';
 import { loadProfile, renderAgentPrompt, type Profile } from '../profiles';
@@ -210,6 +211,7 @@ function startProcess(ctx: Context, r: SpawnRequest, profile: Profile, cwd: stri
     command: ctx.claudeCommand, role: roleOf(r), slug: r.slug, project: ctx.projectName,
     url: `http://127.0.0.1:${ctx.getPort()}`, token: ctx.tokens.issue(r.slug), bypass, baseEnv: process.env,
     pluginDir: ctx.modDir, displayName: `${r.slug} ${ctx.projectName} AndromedaConsole`,
+    ...(ctx.modDir ? { settingsFile: writeSessionSettings(ctx.projectRoot) } : {}),
     allowedTools: ctx.modDir ? (r.review ? REVIEWER_TOOLS : r.recovery ? RECOVERY_TOOLS : AGENT_TOOLS) : undefined,
     appendPromptFile: renderAgentPrompt({ profile, slug: r.slug, project: ctx.projectName, outDir: ctx.promptsDir, git, review: Boolean(r.review), recovery: Boolean(r.recovery), projectRoot: ctx.projectRoot, docs: projectFields.docs, helpers: helperToolsText(ctx.getPrereq()), noGitignore: !hasGitignore(cwd) }),
     // request > profile > project (Phase 6D) > the global choice in Options (Phase 6E) > Claude Code's own default (no --model)

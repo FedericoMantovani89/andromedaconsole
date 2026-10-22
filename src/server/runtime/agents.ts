@@ -10,7 +10,8 @@ import { discoverRepos, repoPathOf } from '../git/repos';
 import { GitignoreAsked, hasGitignore } from '../git/gitignore';
 import { StaleChecker, latestCommitMs } from '../git/stale';
 import { commonDir, excludeConsoleFolder, removeWorktree } from '../git/worktree';
-import { installReleaseHook } from '../git/release-hook';
+import { removeReleaseHook } from '../git/release-hook';
+import { writeSessionSettings } from '../claude-code/project-settings';
 import { helperToolsText } from '../helper-tools';
 import { languageName, listProfileNames, pickableProfiles, renderMainPrompt } from '../profiles';
 import { buildClaudeLaunch, SESSION_ID_RE } from '../claude-code/launch';
@@ -64,9 +65,10 @@ export function registerAgents(c: ProjectContainer): void {
     const key = path.replace(/\\/g, '/').toLowerCase();
     if (preparedRepos.has(key)) return;
     preparedRepos.add(key);
-    // The console's own folder never shows in git status; nobody pushes main from here except the console, after the user approves a release (SPEC 9.1, 15.5).
+    // The console's own folder never shows in git status. Main is pushed only by the console, after the user approves a release (SPEC 9.1, 15.5):
+    // sessions are kept from it by the guard and by deny rules in .andromedaconsole (session-settings.json), not by a git hook in the user's repository.
     await excludeConsoleFolder(path).catch(() => { /* cosmetic: the first worktree tries again */ });
-    await installReleaseHook(path).catch(() => 'skipped_existing');
+    await removeReleaseHook(path).catch(() => 'none');
   });
 
   c.provide('launchWatch', (k) => {
@@ -178,6 +180,7 @@ export function registerAgents(c: ProjectContainer): void {
         command: ctx.claudeCommand, role: 'main', slug: projectName, project: projectName,
         url: `http://127.0.0.1:${shared.getPort()}`, token: tokens.issue(projectName), bypass: ctx.bypass, baseEnv: process.env,
         pluginDir: ctx.modDir, displayName: `${projectName} AndromedaConsole`,
+        ...(ctx.modDir ? { settingsFile: writeSessionSettings(o.projectRoot) } : {}),
         allowedTools: ctx.modDir ? [...MAIN_TOOLS, ...(config.notifications.mainPush ? ['PushNotification'] : [])] : undefined,
         appendPromptFile: renderMainPrompt({ project: projectName, workLanguage: languageName(config.language), outDir: ctx.promptsDir, projectRoot: o.projectRoot, repos: repos(), profiles: pickableProfiles(store.fields().profiles, listProfileNames(o.projectRoot, join(o.configDir, 'profiles'))), helpers: helperToolsText(shared.getPrereq()), mainPush: config.notifications.mainPush,
           noGitignore: new GitignoreAsked(join(o.projectRoot, '.andromedaconsole', 'state', 'gitignore-asked.json')).take(repos().filter((rel) => !hasGitignore(repoPathOf(o.projectRoot, rel)))) }),

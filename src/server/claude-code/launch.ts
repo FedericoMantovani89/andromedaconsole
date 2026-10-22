@@ -6,6 +6,8 @@ export interface LaunchOptions {
   pluginDir?: string;
   /** Text appended to the system prompt (profile, main instructions). */
   appendPromptFile?: string;
+  /** Extra settings for this session only (--settings): the console's deny rules, kept under the project's .andromedaconsole. */
+  settingsFile?: string;
   /** Model alias or id (--model). Omitted: Claude Code's default. */
   model?: string;
   /** Tools approved without a permission prompt (the console's own tools). */
@@ -47,6 +49,7 @@ export function buildClaudeLaunch(o: LaunchOptions): { file: string; args: strin
     ...(o.pluginDir ? ['--plugin-dir', fwd(o.pluginDir)] : []),
     ...(o.appendPromptFile ? ['--append-system-prompt-file', fwd(o.appendPromptFile)] : []),
     ...(o.allowedTools && o.allowedTools.length > 0 ? ['--allowedTools', o.allowedTools.join(',')] : []),
+    ...(o.settingsFile ? ['--settings', fwd(o.settingsFile)] : []),
     ...(o.bypass ? ['--dangerously-skip-permissions'] : []),
   ];
   const bareName = !/[\\/]/.test(cmd!) && !/\.exe$/i.test(cmd!);

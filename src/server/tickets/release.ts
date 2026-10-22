@@ -4,7 +4,6 @@ import { identityArgs } from '../git/commit';
 import { git } from '../git/git';
 import { worktreesDirFor } from '../git/worktree';
 import { changedFiles, ensureProjectWorktree, withProjectLock } from '../git/merge';
-import { withReleaseToken } from '../git/release-hook';
 import { repoPathOf } from '../git/repos';
 import { reportPath, type ChangedFile } from './report';
 import type { Ticket, TicketStore } from './store';
@@ -89,8 +88,8 @@ interface Prepared { item: Item; files: ChangedFile[]; extraCommits: number; tes
 
 /**
  * The release to `origin/main` (SPEC 15.5): the console proposes, the user approves once from the queue, and only then the console
- * merges the project branch into the local `main` of the user's checkout, runs the tests, and pushes with a one-time token that the
- * pre-push hook asks for. Whatever goes wrong, the checkout keeps what the user changed in the meantime.
+ * merges the project branch into the local `main` of the user's checkout, runs the tests, and pushes (Claude Code sessions are kept from
+ * pushing main by the guard and the project's deny rules). Whatever goes wrong, the checkout keeps what the user changed in the meantime.
  *
  * A project folder that holds several repositories is released with ONE confirmation for all of them: every repository is checked before
  * anything is merged or pushed (one that fails stops the whole release), then each is merged and pushed in turn.
@@ -337,7 +336,7 @@ export class ReleaseService {
     if (!remotes.includes('origin')) {
       note = ' There is no remote named origin: the release is a local merge only.';
     } else {
-      const pushed = await withReleaseToken(root, (env) => git(root, ['push', 'origin', target], { env, timeoutMs: 120_000 }));
+      const pushed = await git(root, ['push', 'origin', target], { timeoutMs: 120_000 });
       if (pushed.code !== 0) {
         return { code: 'release.pushFailed', text: `the merge into ${target} is done locally but the push failed: ${(pushed.stderr || pushed.stdout).trim().slice(-400)} Propose again to retry the push.` };
       }
