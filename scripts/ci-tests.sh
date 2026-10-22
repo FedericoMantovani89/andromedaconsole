@@ -9,6 +9,8 @@ set +e
 # Two workers at a time: the crashes and the 20 s hangs come with several terminals starting and closing together on the shared runner
 # (the system ConPTY instead of the bundled one did not help). CI_TESTS_WORKERS changes the number.
 WORKERS="--maxWorkers=${CI_TESTS_WORKERS:-2}"
+# The test files to run, as arguments (the smoke job passes its seven); with none, the whole suite.
+TARGETS="$*"
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
@@ -26,7 +28,8 @@ files_total() { plain "$1" | grep -E '^ *Test Files ' | tail -1 | grep -oE '\([0
 # Sourced by a test of this script: only the functions are wanted.
 [ "${CI_TESTS_SOURCE_ONLY:-}" = 1 ] && return 0
 
-npx vitest run $WORKERS 2>&1 | tee "$log"
+# shellcheck disable=SC2086
+npx vitest run $WORKERS $TARGETS 2>&1 | tee "$log"
 code=${PIPESTATUS[0]}
 [ "$code" -eq 0 ] && exit 0
 if has_failed_tests "$log" || ! crashed "$log"; then exit "$code"; fi
@@ -37,8 +40,9 @@ total=$(files_total "$log")
 passed=$(files_passed "$log")
 n=$(echo "$files" | grep -c .)
 if [ -z "$files" ] || [ -z "$total" ] || [ -z "$passed" ] || [ $((passed + n)) -ne "$total" ]; then
-  echo "::warning::a vitest worker crashed with no test failing and the crashed files do not add up ($passed passed + $n crashed of $total); running the whole suite once more"
-  npx vitest run $WORKERS
+  echo "::warning::a vitest worker crashed with no test failing and the crashed files do not add up ($passed passed + $n crashed of $total); running everything once more"
+  # shellcheck disable=SC2086
+  npx vitest run $WORKERS $TARGETS
   exit $?
 fi
 

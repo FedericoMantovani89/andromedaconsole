@@ -37,9 +37,13 @@ jobs:
       - name: Build the UI
         run: npm run build
 
+      - name: Check (texts, literals, types)
+        run: npm run check
+
+      # The same seven files as `npm run test:smoke` (package.json), through the script that runs a crashed file again (see the `test` job).
       - name: Smoke tests
         shell: bash
-        run: npm run test:smoke
+        run: bash scripts/ci-tests.sh test/server.test.ts test/merge-ticket.test.ts test/spawn.test.ts test/pty-manager.test.ts test/git-worktree.test.ts test/v1.test.ts test/i18n-checks.test.ts
         env:
           TEMP: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
