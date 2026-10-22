@@ -1,7 +1,8 @@
 import type { SessionInfo } from '../shared/protocol';
 import { api } from './api';
 import { STATE_KEYS } from './chips';
-import { bindText } from './i18n-client';
+import { bindText, k } from './i18n-client';
+import { setIconButton } from './icons';
 import { errorText } from './new-agent';
 import { el } from './dom';
 
@@ -10,7 +11,7 @@ export function createCompactButton(slug: string, onCompact: (slug: string) => v
   const b = el('button');
   b.type = 'button';
   b.className = 'panel-compact';
-  bindText(b, 'panel.compact');
+  setIconButton(b, 'chevronUp', k('panel.compact'));
   b.addEventListener('mousedown', (ev) => ev.preventDefault()); // a button here must not take the keyboard
   b.addEventListener('click', (ev) => { ev.stopPropagation(); onCompact(slug); });
   return b;
@@ -49,7 +50,9 @@ export function createDormantPanel(info: SessionInfo, onCompact?: (slug: string)
       error.textContent = errorText({ code: r.body?.code ?? 'generic' });
     }).catch(() => { wake.disabled = false; });
   });
-  header.append(title, meta, state, error, wake);
+  const name = el('span', 'panel-name');
+  name.append(title, meta);
+  header.append(name, state, error, wake);
   if (onCompact) header.append(createCompactButton(info.slug, onCompact));
 
   const body = el('div', 'panel-dormant-body');

@@ -8,6 +8,12 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+### Changed
+- UI: the galaxy icon is gone from the top bar; "+ project" is a bold "+"; the Settings icon is a real cog; Expand and Compact are chevron buttons; an agent's profile sits under its name.
+- The progress chip of an agent ("4/11") opens a dialog with the checklist it is keeping (`GET /api/agents/<slug>/checklist`).
+- Archived agents: the confirmation of "Archive all finished" and "Delete all" is a popup over the list, not a line at its end.
+- The main's prompt asks for the most specific profile and uses "developer" only when nothing else fits.
+
 ## [0.0.11] - 2026-10-19
 
 ### Added

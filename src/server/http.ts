@@ -434,6 +434,10 @@ export function createRequestHandler(source: Context | ProjectResolver, host: Ho
     const reading = /^\/api\/reading\/([\w-]+)$/.exec(path);
     if (req.method === 'GET' && reading) return send(res, 200, { entries: ctx.reading.list(reading[1]!) });
 
+    // The checklist the agent is keeping (the ticket's steps), for the dialog behind the progress chip.
+    const checklist = /^\/api\/agents\/([\w-]+)\/checklist$/.exec(path);
+    if (req.method === 'GET' && checklist) return send(res, 200, { steps: ctx.tickets.get(checklist[1]!)?.steps ?? [] });
+
     const answer = /^\/api\/queue\/([\w-]+)\/answer$/.exec(path);
     if (req.method === 'POST' && answer) {
       const body = await readBodyOr400(req, res);

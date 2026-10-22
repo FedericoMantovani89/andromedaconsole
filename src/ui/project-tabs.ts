@@ -1,7 +1,7 @@
 import type { ApiError, ProjectTab } from '../shared/protocol';
 import { api } from './api';
 import { el, checkbox, showDialog } from './dom';
-import { bindText } from './i18n-client';
+import { bindText, k, setTitle } from './i18n-client';
 import { errorText } from './new-agent';
 import { closeOverlay } from './settings';
 
@@ -13,7 +13,7 @@ export interface TabHandlers {
 
 /**
  * One tab per open project (the selected one `current`, a dot class `attention` while that project's queue is not empty), a small close
- * button after each, then the "+ project" button. The nodes are replaced on every push: a tab button never needs to keep the keyboard.
+ * button after each, then a bold "+" button (new project). The nodes are replaced on every push: a tab button never needs to keep the keyboard.
  */
 export function renderProjectTabs(tabs: HTMLElement, projects: ProjectTab[], selected: string, h: TabHandlers): void {
   tabs.replaceChildren();
@@ -32,8 +32,9 @@ export function renderProjectTabs(tabs: HTMLElement, projects: ProjectTab[], sel
     close.addEventListener('click', () => h.close(p.name));
     tabs.append(tab, close);
   }
-  const add = el('button', 'tab');
+  const add = el('button', 'tab tab-add');
   bindText(add, 'tabs.newProject');
+  setTitle(add, k('tabs.newProject.title'));
   add.addEventListener('click', () => h.add());
   tabs.append(add);
 }

@@ -76,10 +76,11 @@ export function refreshArchiveDialog(state: StateMessage): void {
   paintRows(open.list, archived);
   open.all.disabled = archived.length === 0;
   open.deleteAll.disabled = archived.length === 0;
-  if (archived.length === 0) open.dialog.querySelector('.archive-confirm.delete')?.remove();
+  const popup = (kind: string): Element | null | undefined => open?.dialog.parentElement?.querySelector(`.archive-confirm.${kind}`)?.parentElement;
+  if (archived.length === 0) popup('delete')?.remove();
   const n = archivableAgents(state.agents).length;
   open.finished.disabled = n === 0;
-  if (n === 0) open.dialog.querySelector('.archive-confirm.archive')?.remove();
+  if (n === 0) popup('archive')?.remove();
 }
 
 /** The archive list (a dialog like the other ones): who is archived, and a button to bring each one, or all, back. */
@@ -107,25 +108,29 @@ export function openArchiveDialog(getState: () => StateMessage | undefined): voi
   finished.type = 'button';
   finished.className = 'archive-finished';
   bindText(finished, k('archive.archiveFinished'));
-  /** A question line above the buttons: the one that was open goes, Cancel closes this one, Yes runs `onYes`. */
+  /** A confirmation popup over the dialog (a long list would push an inline question out of sight): the one that was open goes, Cancel closes this one, Yes runs `onYes`. */
   const ask = (kind: 'archive' | 'delete', count: number, textKey: string, yesKey: string, onYes: () => void): void => {
-    dialog.querySelectorAll('.archive-confirm').forEach((n) => n.remove());
+    overlay.querySelectorAll('.archive-confirm-backdrop').forEach((n) => n.remove());
     if (count === 0) return;
-    const line = el('div', `archive-confirm ${kind}`);
-    const text = el('span');
+    const backdrop = el('div', 'archive-confirm-backdrop');
+    const line = el('div', `dialog archive-confirm ${kind}`);
+    const text = el('p');
     bindText(text, textKey, { count });
+    const buttons = el('div', 'form-actions');
     const yes = el('button');
     yes.type = 'button';
     yes.className = 'archive-confirm-yes';
     bindText(yes, yesKey);
-    yes.addEventListener('click', () => { line.remove(); onYes(); });
+    yes.addEventListener('click', () => { backdrop.remove(); onYes(); });
     const no = el('button');
     no.type = 'button';
     no.className = 'archive-confirm-no';
     bindText(no, 'common.cancel');
-    no.addEventListener('click', () => line.remove());
-    line.append(text, yes, no);
-    actions.before(line);
+    no.addEventListener('click', () => backdrop.remove());
+    buttons.append(yes, no);
+    line.append(text, buttons);
+    backdrop.append(line);
+    overlay.append(backdrop);
   };
   finished.addEventListener('click', () => {
     ask('archive', archivableAgents(getState()?.agents ?? []).length, k('archive.confirmFinished'), k('archive.confirmYes'),

@@ -9,6 +9,7 @@ import { errorText } from './new-agent';
 import { bindText, k } from './i18n-client';
 import { setIconButton } from './icons';
 import { createArchiveButton, syncArchiveButton } from './archive';
+import { openChecklistDialog } from './checklist-dialog';
 import { createCompactButton, createDormantPanel } from './dormant-panel';
 import { STATE_KEYS, applyBudget, applyLoop, applyProgress, applyRequests, applyTicket, applyWaiting } from './chips';
 import { SCROLLBACK, TERM_OPTIONS } from './term-theme';
@@ -23,6 +24,22 @@ export function stallOf(info: SessionInfo): StallInfo | undefined {
     ...(info.silentMinutes !== undefined ? { silentMinutes: info.silentMinutes } : {}),
   };
   return stall.launch || stall.silentMinutes !== undefined ? stall : undefined;
+}
+
+/** The progress chip opens the agent's checklist; it never takes the keyboard from the terminal on a mouse press. */
+function openChecklistOnClick(chip: HTMLElement, slug: string): void {
+  chip.classList.add('panel-progress-open');
+  chip.setAttribute('role', 'button');
+  chip.addEventListener('mousedown', (ev) => ev.preventDefault());
+  chip.addEventListener('click', (ev) => { ev.stopPropagation(); openChecklistDialog(slug); });
+}
+
+/** An agent's name with its profile under it (the main keeps its label inline). */
+function nameBlock(title: HTMLElement, meta: HTMLElement): HTMLElement {
+  const block = document.createElement('span');
+  block.className = 'panel-name';
+  block.append(title, meta);
+  return block;
 }
 
 function applyStalled(el: HTMLElement, stall: StallInfo | undefined): void {
@@ -70,6 +87,7 @@ function createPanel(info: SessionInfo, onActivate: (slug: string) => void, proj
   const progressEl = document.createElement('span');
   progressEl.className = 'panel-progress';
   progressEl.hidden = true;
+  openChecklistOnClick(progressEl, info.slug);
   const stalledEl = document.createElement('span');
   stalledEl.className = 'panel-stalled';
   stalledEl.hidden = true;
@@ -96,7 +114,7 @@ function createPanel(info: SessionInfo, onActivate: (slug: string) => void, proj
   setIconButton(readBtn, 'clipboard', k('reader.open'));
   readBtn.addEventListener('mousedown', (ev) => ev.preventDefault()); // a button here must not take the keyboard
   readBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('console-open-reader', { detail: info.slug })));
-  header.append(title, meta, badge, stateEl, stalledEl, ticketEl, budgetEl, loopEl, waitingEl, requestsWaitingEl, requestsOwedEl, progressEl);
+  header.append(info.role === 'main' ? title : nameBlock(title, meta), ...(info.role === 'main' ? [meta] : []), badge, stateEl, stalledEl, ticketEl, budgetEl, loopEl, waitingEl, requestsWaitingEl, requestsOwedEl, progressEl);
   // Voice dictation goes to the main, so only the main's panel has the button (built once with the header, never re-parented).
   if (info.role === 'main') {
     const micBtn = document.createElement('button');
@@ -341,6 +359,7 @@ export class Workspace {
     bindText(state, STATE_KEYS[info.state]);
     const progress = document.createElement('span');
     progress.className = 'panel-progress';
+    openChecklistOnClick(progress, info.slug);
     applyProgress(progress, info.progress);
     const stalled = document.createElement('span');
     stalled.className = 'panel-stalled';
@@ -359,12 +378,13 @@ export class Workspace {
     applyRequests(requestsWaiting, requestsOwed, info.requests);
     const stale = document.createElement('span');
     applyStale(stale, info.stale);
-    el.append(title, meta, state, stalled, ticket, budget, loop, waiting, requestsWaiting, requestsOwed, stale, progress, createArchiveButton(info.slug));
+    el.append(nameBlock(title, meta), state, stalled, ticket, budget, loop, waiting, requestsWaiting, requestsOwed, stale, progress, createArchiveButton(info.slug));
     syncArchiveButton(el, info.state, info.ticket);
     if (dormant) this.dormantControls(el, info.slug);
     if (!pending) { // a queued agent has no terminal to expand yet
       const expand = document.createElement('button');
-      bindText(expand, 'panel.expand');
+      expand.className = 'bar-expand';
+      setIconButton(expand, 'chevronDown', k('panel.expand'));
       expand.addEventListener('click', () => { this.collapsed.delete(info.slug); this.expanded = info.slug; this.update(this.lastMain!, this.lastAgents); });
       el.append(expand);
     }

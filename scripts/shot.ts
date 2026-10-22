@@ -107,6 +107,16 @@ try {
       { text: 'Step 3 of 5 done: the CSV export endpoint returns the rows in the order of the table and the tests for it pass.' },
       { text: 'Next I was going to add the pagination parameters (page and size) to the same endpoint and cover them with tests. I stopped because the console restarted; nothing is uncommitted, the last commit is the step 3 one.' },
     ] }) }));
+    // A demo checklist behind every agent's progress chip (the fake agents have no ticket), to see the checklist dialog.
+    await page.route((url) => /^\/api\/agents\/[\w-]+\/checklist$/.test(url.pathname), (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ steps: [
+      { n: 1, title: 'Study the code of the export endpoint', done: true, note: 'Found the table order in ExportService' },
+      { n: 2, title: 'Write the tests first', done: true },
+      { n: 3, title: 'Add the CSV writer', done: true },
+      { n: 4, title: 'Add the pagination parameters', done: false },
+      { n: 5, title: 'Answer the question of abc-frontend', done: false, waitingOn: { requestId: 'TODO-467901', to: 'abc-frontend' } },
+      { n: 6, title: 'Validation: run the full test suite', done: false },
+      { n: 7, title: 'Update the documentation', done: false },
+    ] }) }));
     await page.routeWebSocket((url) => url.pathname === '/ws/ui', (ws) => {
       const upstream = ws.connectToServer();
       ws.onMessage((m) => upstream.send(m));
