@@ -36,13 +36,16 @@ const cwdOf = async (s: Running, slug: string): Promise<string> => {
 };
 const branches = (repo: string): string[] => gitSync(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads').split('\n').filter(Boolean);
 
-it('starting an agent creates the project branch, its branch and the sibling worktree, installs the hook and launches inside it', async () => {
+it('starting an agent creates the project branch, its branch and the sibling worktree, writes its push hook and launches inside it', async () => {
   const { s, t } = await boot();
   expect((await spawnTool(s, 'fix-login')).body).toEqual({ status: 'started', name: 'fix-login' });
   const wt = worktreePathFor(t.repo, 'fix-login');
   expect(branches(t.repo)).toEqual(expect.arrayContaining(['project/shop-api', agentBranchFor('shop-api', 'fix-login')]));
   expect(existsSync(wt)).toBe(true);
-  expect(gitSync(wt, 'config', '--worktree', '--get', 'core.hooksPath')).toContain('console-hooks');
+  // the push hook is a script under the project's .andromedaconsole, reached through the session's environment: nothing in the repository's own config
+  expect(existsSync(join(t.repo, '.andromedaconsole', 'state', 'hooks', 'fix-login', 'pre-push'))).toBe(true);
+  expect(existsSync(join(t.repo, '.git', 'console-hooks'))).toBe(false);
+  expect(readFileSync(join(wt, '.andromedaconsole', '.gitignore'), 'utf8')).toBe('*\n');
   expect((await cwdOf(s, 'fix-login')).toLowerCase()).toBe(wt.toLowerCase());
 });
 it('the prompt file tells the agent its branch, its folder and that the console commits', async () => {
@@ -131,8 +134,9 @@ it('worktrees:false keeps the Phase 2 behaviour: the agent runs in the project f
 
 it('keeps the console folder out of git status from the start, without touching the project\'s .gitignore', async () => {
   const { t } = await boot({ config: { git: { worktrees: false } } });
-  const exclude = readFileSync(join(t.repo, '.git', 'info', 'exclude'), 'utf8');
-  expect(exclude.split(/\r?\n/)).toContain('.andromedaconsole/');
+  expect(readFileSync(join(t.repo, '.andromedaconsole', '.gitignore'), 'utf8')).toBe('*\n'); // the folder carries its own rule
+  const exclude = join(t.repo, '.git', 'info', 'exclude');
+  expect(existsSync(exclude) ? readFileSync(exclude, 'utf8') : '').not.toContain('.andromedaconsole');
   expect(gitSync(t.repo, 'status', '--porcelain')).toBe('');
   expect(existsSync(join(t.repo, '.gitignore'))).toBe(false);
 });

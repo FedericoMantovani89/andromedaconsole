@@ -141,7 +141,12 @@ function stripPrefix(tokens: string[]): { argv: string[]; env: string[] } {
     if (t.length > 0 && WRAPPERS.has(commandName(t[0]!))) {
       const wrapper = commandName(t[0]!);
       t = t.slice(1);
-      while (t.length > 0 && /^-/.test(t[0]!)) t = t.slice(wrapper === 'xargs' && XARGS_WITH_ARG.has(t[0]!) ? 2 : 1);
+      while (t.length > 0 && /^-/.test(t[0]!)) {
+        // `env -i` and `env -u NAME` / `--unset=NAME` take variables away from the command: that is reported like an assignment of a git variable,
+        // so the guard sees an attempt to drop the session's git settings (its push hook). `-u` takes the next word with it.
+        if (wrapper === 'env' && /^(-i|--ignore-environment|-0|-u|--unset)/.test(t[0]!)) env.push('GIT_CONFIG_UNSET=1');
+        t = t.slice(wrapper === 'xargs' && XARGS_WITH_ARG.has(t[0]!) ? 2 : wrapper === 'env' && t[0] === '-u' ? 2 : 1);
+      }
       if (wrapper === 'timeout' && t.length > 0 && /^\d+(\.\d+)?[smhd]?$/.test(t[0]!)) t = t.slice(1);
       continue;
     }

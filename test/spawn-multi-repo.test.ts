@@ -73,10 +73,10 @@ it('the UI route takes a repo too', async () => {
   const ok = await ui(s, '/api/agents', 'POST', { slug: 'x-job', profile: 'developer', repo: 'abc-be' });
   expect(ok.status).toBe(201);
 });
-it('the ticket remembers the repo, and the release hook is installed in every repo at start', async () => {
+it('the ticket remembers the repo, and no git hook is put in any repo at start', async () => {
   const { s, m } = await boot();
   await spawn(s, 'audit-privacy', 'abc-fe');
   const ticket = JSON.parse(readFileSync(join(m.root, '.andromedaconsole', 'state', 'tickets', 'audit-privacy.json'), 'utf8'));
   expect(ticket.repo).toBe('abc-fe');
-  for (const name of ['abc-fe', 'abc-be']) expect(existsSync(join(m.repos[name]!.repo, '.git', 'hooks', 'pre-push')), name).toBe(true);
+  for (const name of ['abc-fe', 'abc-be']) expect(existsSync(join(m.repos[name]!.repo, '.git', 'hooks', 'pre-push')), name).toBe(false);
 });

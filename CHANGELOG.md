@@ -12,6 +12,8 @@ change that introduces the behaviour.
 - UI: the galaxy icon is gone from the top bar; "+ project" is a bold "+"; the Settings icon is a real cog; Expand and Compact are chevron buttons; an agent's profile sits under its name.
 - The progress chip of an agent ("4/11") opens a dialog with the checklist it is keeping (`GET /api/agents/<slug>/checklist`).
 - The console no longer installs a `pre-push` hook in the user's repository (an old one of its own is removed); sessions it starts get deny rules for pushes of main and tags through `--settings` with a file under `.andromedaconsole`, so nothing is left behind in the repository or in `.claude`.
+- Nothing of the console is left in the user's `.git` any more: the agents' `pre-push` script is written under `.andromedaconsole/state/hooks` and reaches the session through `GIT_CONFIG_*` environment variables (no `core.hooksPath` or `extensions.worktreeConfig` in the repository config; the guard denies unsetting them), and `.andromedaconsole` ignores itself with a `.gitignore` inside it instead of a line in `.git/info/exclude` (the old line is removed at project open).
+- Guard: an agent's program written on the command line (`node -e`, `python -c`, a heredoc) that runs `git push` or `git commit` is refused (`git.commit-push`); a program kept in a file is not read, a known limit written in SPEC 9.5.
 - Archived agents: the confirmation of "Archive all finished" and "Delete all" is a popup over the list, not a line at its end.
 - The main's prompt asks for the most specific profile and uses "developer" only when nothing else fits.
 

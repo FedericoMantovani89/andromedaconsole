@@ -86,7 +86,7 @@ try {
     const branches = gitSync(t.repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads').split('\n');
     check('the project branch and the agent branch exist', branches.includes('project/shop-api') && branches.includes('agent/shop-api/fix-login-timeout'), branches.join(','));
     check('the worktree is a sibling folder of the repository', existsSync(wt));
-    check('the per-worktree pre-push hook is installed', gitSync(wt, 'config', '--worktree', '--get', 'core.hooksPath').includes('console-hooks'));
+    check('the per-worktree pre-push script is written under .andromedaconsole', existsSync(join(t.repo, '.andromedaconsole', 'state', 'hooks', 'fix-login-timeout', 'pre-push')));
     check('the process runs inside the worktree', await until(async () => (await snapshot('fix-login-timeout')).toLowerCase().includes(`cwd ${wt}`.toLowerCase())), await snapshot('fix-login-timeout'));
     const chip = () => page.locator(`${panel('fix-login-timeout')} .panel-state`).innerText();
     await event('fix-login-timeout', 'session.start');

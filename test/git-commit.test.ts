@@ -2,7 +2,6 @@ import { it, expect, vi } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createAgentWorktree } from '../src/server/git/worktree';
-import { installPushHook } from '../src/server/git/hooks';
 import { commitStep, commitWip } from '../src/server/git/commit';
 import { pushBranch } from '../src/server/git/push';
 import { DEFAULT_SECRET_PATTERNS } from '../src/server/git/secrets';
@@ -117,9 +116,8 @@ it('a WIP during a merge refuses with code merging and stages nothing', async ()
   expect(gitSync(wt.path, 'diff', '--cached', '--name-only').split('\n')).not.toContain('new.txt');
   expect(gitSync(wt.path, 'status', '--porcelain')).toContain('?? new.txt');
 });
-it('push: only the agent branch goes out, with the hook installed', async () => {
+it('push: only the agent branch goes out', async () => {
   const { repo, wt, remote, step } = await setup();
-  await installPushHook({ repo, worktree: wt.path, branch: wt.branch, slug: 'fix-login' });
   await step(1, 5, 'Study');
   expect(await pushBranch({ worktree: wt.path, branch: wt.branch })).toEqual({ ok: true });
   expect(branchesOf(remote)).toContain('agent/shop-api/fix-login');
@@ -131,7 +129,6 @@ it('push without a remote is skipped, not an error', async () => {
 });
 it('push refused by the remote reports the reason', async () => {
   const { repo, wt, step } = await setup();
-  await installPushHook({ repo, worktree: wt.path, branch: wt.branch, slug: 'fix-login' });
   await step(1, 5, 'Study');
   const r = await pushBranch({ worktree: wt.path, branch: 'agent/shop-api/not-mine' });
   expect(r.ok).toBe(false);

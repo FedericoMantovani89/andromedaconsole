@@ -11,6 +11,12 @@ describe('git environment that changes config, hooks or programs', () => {
     ['GIT_DIR=../other/.git git status', 'git.config-write'],
     ['env GIT_SSH_COMMAND=evil git fetch', 'git.config-write'],
     ['export GIT_CONFIG_COUNT=1; git status', 'git.config-write'],
+    ['unset GIT_CONFIG_COUNT; git push origin HEAD', 'git.config-write'],
+    ['env -u GIT_CONFIG_COUNT git push origin HEAD', 'git.config-write'],
+    ['env --unset=GIT_CONFIG_KEY_0 git status', 'git.config-write'],
+    ['env -i git status', 'git.config-write'],
+    ['env GIT_CONFIG_COUNT=0 git status', 'git.config-write'],
+    ['env PAGER=cat git log', 'ALLOW'],
     ['git p origin HEAD:main', 'git.alias'],
     ['git wipe-everything', 'git.alias'],
     // Harmless variables and external commands stay allowed (Review Focus 4).
@@ -26,9 +32,28 @@ describe('git environment that changes config, hooks or programs', () => {
   const ps: Row[] = [
     [PS_ENV, 'git.config-write'],
     ['Set-Item env:GIT_CONFIG_COUNT 1', 'git.config-write'],
+    ['Remove-Item env:GIT_CONFIG_COUNT', 'git.config-write'],
     ['$env:GIT_PAGER="cat"; git log', 'ALLOW'],
   ];
   it.each(ps)('powershell: %s -> %s', (c, e) => expect(verdict(c, { tool: 'PowerShell' })).toBe(e));
+
+  const programs: Row[] = [
+    ['node -e "require(\'child_process\').execSync(\'git push origin HEAD:main\')"', 'git.commit-push'],
+    ['python3 -c "import subprocess; subprocess.run([\'git\',\'commit\',\'-m\',\'x\'])"', 'git.commit-push'],
+    ['node -e "require(\'child_process\').spawnSync(\'git\', [\'push\'])"', 'git.commit-push'],
+    ["python - <<'EOF'\nimport subprocess\nsubprocess.run(['git', 'push', 'origin', 'HEAD:main'])\nEOF", 'git.commit-push'],
+    ['perl -e \'system("git commit --allow-empty -m x")\'', 'git.commit-push'],
+    // A program that does not run git, or only reads from it, stays allowed.
+    ['node -e "console.log(1)"', 'ALLOW'],
+    ['python -c "print(\'push the button\')"', 'ALLOW'],
+    ['node scripts/build.js', 'ALLOW'],
+    ['git log --oneline | node -e "process.stdin.pipe(process.stdout)"', 'ALLOW'],
+  ];
+  it.each(programs)('a program on the command line: %s -> %s', (c, e) => expect(verdict(c)).toBe(e));
+  it('the rule is for agents: the main may commit, so a program of the main that does is not refused (SPEC 9.5, known limits)', () => {
+    expect(verdict('git commit -m x', { role: 'main' })).toBe('ALLOW');
+    expect(verdict(programs[0]![0], { role: 'main' })).toBe('ALLOW');
+  });
 
   it('the main is denied with the hooks rule (it is a main rule)', () => {
     expect(verdict(BASH_ENV, { role: 'main' })).toBe('git.hooks-tamper');

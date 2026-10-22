@@ -4,12 +4,13 @@ import type { Context } from '../http';
 import { buildClaudeLaunch, SESSION_ID_RE } from '../claude-code/launch';
 import { writeSessionSettings } from '../claude-code/project-settings';
 import { hasGitignore } from '../git/gitignore';
+import { ignoreConsoleFolder } from '../git/console-folder';
 import { helperToolsText } from '../helper-tools';
 import { loadProfile, renderAgentPrompt, type Profile } from '../profiles';
 import { validateSlug } from '../../shared/slug';
 import { git } from '../git/git';
 import { agentBranchFor, checkSpawnable, createAgentWorktree, createReviewWorktree, discardAgentWorktree, GitError, removeWorktree, worktreesDirFor } from '../git/worktree';
-import { installPushHook } from '../git/hooks';
+import { pushHookEnv } from '../git/hooks';
 import { repoPathOf, resolveRepo } from '../git/repos';
 import type { SpawnRequest } from './scheduler';
 import { errorMessage } from '../../shared/guards';
@@ -45,8 +46,7 @@ export const goalMessage = (goal: string, file?: string): string =>
 /** The goal as a file next to the agent's other console files (`.andromedaconsole/`): it can be read again after a compaction. Undefined when it cannot be written. */
 function writeGoalFile(cwd: string, slug: string, goal: string): string | undefined {
   try {
-    const dir = join(cwd, '.andromedaconsole');
-    mkdirSync(dir, { recursive: true });
+    const dir = ignoreConsoleFolder(cwd);
     const file = join(dir, `goal-${slug}.md`);
     writeFileSync(file, `---\nagent: ${slug}\n---\n${goal}\n`, 'utf8');
     return file;
@@ -191,7 +191,6 @@ async function startInWorktree(ctx: Context, r: SpawnRequest, profile: Profile, 
       : await createAgentWorktree({ repo, project: ctx.projectName, slug: r.slug, dir, ...(r.resumeBranch ? { branch: r.resumeBranch } : {}), ...(startPoint ? { startPoint } : {}) });
     // Where this agent's own work begins: its report, review and squash merge take only what came after it (SPEC 15.4).
     if (made.base !== undefined) ctx.tickets.setBaseSha(r.slug, made.base);
-    await installPushHook({ repo, worktree: made.path, branch: made.branch, slug: r.slug });
     await ctx.afterWorktreeCreated?.(r.slug);
     ctx.registry.setGit(r.slug, { worktree: made.path, branch: made.branch, repo });
     startProcess(ctx, r, profile, made.path, { worktree: made.path, branch: made.branch }, bypass);
@@ -207,9 +206,12 @@ async function startInWorktree(ctx: Context, r: SpawnRequest, profile: Profile, 
 
 function startProcess(ctx: Context, r: SpawnRequest, profile: Profile, cwd: string, git: { worktree: string; branch: string } | undefined, bypass: boolean): void {
   const projectFields = ctx.store.fields();
+  // A worktree session (every launch, a resumed one too) gets its push hook and its console folder's own .gitignore before it starts.
+  const hookEnv = git ? pushHookEnv({ projectRoot: ctx.projectRoot, branch: git.branch, slug: r.slug }) : {};
+  if (git) ignoreConsoleFolder(git.worktree);
   const launch = buildClaudeLaunch({
     command: ctx.claudeCommand, role: roleOf(r), slug: r.slug, project: ctx.projectName,
-    url: `http://127.0.0.1:${ctx.getPort()}`, token: ctx.tokens.issue(r.slug), bypass, baseEnv: process.env,
+    url: `http://127.0.0.1:${ctx.getPort()}`, token: ctx.tokens.issue(r.slug), bypass, baseEnv: { ...process.env, ...hookEnv },
     pluginDir: ctx.modDir, displayName: `${r.slug} ${ctx.projectName} AndromedaConsole`,
     ...(ctx.modDir ? { settingsFile: writeSessionSettings(ctx.projectRoot) } : {}),
     allowedTools: ctx.modDir ? (r.review ? REVIEWER_TOOLS : r.recovery ? RECOVERY_TOOLS : AGENT_TOOLS) : undefined,

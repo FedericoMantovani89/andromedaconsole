@@ -9,7 +9,8 @@ import type { QuotaStep } from '../budget/quota';
 import { discoverRepos, repoPathOf } from '../git/repos';
 import { GitignoreAsked, hasGitignore } from '../git/gitignore';
 import { StaleChecker, latestCommitMs } from '../git/stale';
-import { commonDir, excludeConsoleFolder, removeWorktree } from '../git/worktree';
+import { commonDir, dropLegacyExclude, removeWorktree } from '../git/worktree';
+import { ignoreConsoleFolder } from '../git/console-folder';
 import { removeReleaseHook } from '../git/release-hook';
 import { writeSessionSettings } from '../claude-code/project-settings';
 import { helperToolsText } from '../helper-tools';
@@ -61,13 +62,16 @@ export function registerAgents(c: ProjectContainer): void {
     };
   });
   c.provide('forgetRepos', () => (): void => { repoCache = undefined; });
-  c.provide('prepareRepo', () => async (path: string): Promise<void> => {
+  c.provide('prepareRepo', (k) => async (path: string): Promise<void> => {
     const key = path.replace(/\\/g, '/').toLowerCase();
     if (preparedRepos.has(key)) return;
     preparedRepos.add(key);
-    // The console's own folder never shows in git status. Main is pushed only by the console, after the user approves a release (SPEC 9.1, 15.5):
-    // sessions are kept from it by the guard and by deny rules in .andromedaconsole (session-settings.json), not by a git hook in the user's repository.
-    await excludeConsoleFolder(path).catch(() => { /* cosmetic: the first worktree tries again */ });
+    // The console's own folder never shows in git status (it carries its own .gitignore), and main is pushed only by the console, after the user
+    // approves a release (SPEC 9.1, 15.5): sessions are kept from it by the guard and by deny rules in .andromedaconsole (session-settings.json).
+    // Nothing of the console stays in the user's repository: what earlier versions put there (an exclude line, a pre-push hook) is taken away.
+    const root = k.get('env').o.projectRoot;
+    if (resolve(path).toLowerCase() === resolve(root).toLowerCase()) { try { ignoreConsoleFolder(root); } catch { /* cosmetic: the first worktree tries again */ } }
+    await dropLegacyExclude(path).catch(() => { /* cosmetic */ });
     await removeReleaseHook(path).catch(() => 'none');
   });
 

@@ -243,10 +243,10 @@ const isSecret = (path: string, patterns: string[]): boolean => {
   return findSecrets([p], patterns).length > 0;
 };
 
-/** `.git/hooks/...` and the console's own `console-hooks` folder (the release token lives there). */
+/** `.git/hooks/...`, the older `console-hooks` folder, and the console's own state under `.andromedaconsole/state` (the agents' hook scripts and the session settings live there). */
 function isHooksPath(p: string): boolean {
   const parts = p.split(/[\\/]+/).map((c) => c.toLowerCase());
-  return parts.includes('console-hooks') || parts.some((c, i) => c === '.git' && parts[i + 1] === 'hooks');
+  return parts.includes('console-hooks') || parts.some((c, i) => (c === '.git' && parts[i + 1] === 'hooks') || (c === '.andromedaconsole' && parts[i + 1] === 'state'));
 }
 
 const SETTINGS_FILE = 'settings.local.json';
@@ -323,12 +323,30 @@ function downloadRule(segments: Segment[]): GuardDecision | undefined {
   return undefined;
 }
 
+/** Interpreters whose command line can carry a whole program (`node -e`, `python -c`, a heredoc): the guard cannot run it, only read it. */
+const INTERPRETER = /^(node(js)?|deno|bun|tsx|ts-node|python(\d+(\.\d+)*)?|py|pythonw|ruby|perl|php|lua)$/;
+
+/**
+ * A program written on the command line that runs `git push` or `git commit` itself (`node -e "execSync('git push')"`, `python -c "...
+ * ['git','commit']..."`, a heredoc) would get around the git rules above: the text is read for the two words. It is a heuristic for the
+ * obvious case; a program kept in a file is not read (SPEC 9.5: known limits). The push hook still refuses a push of any other ref.
+ */
+function interpreterGit(command: string, segments: Segment[]): GuardDecision | undefined {
+  if (!segments.some((s) => INTERPRETER.test(commandName(s.argv[0] ?? '')))) return undefined;
+  if (/\bgit\b/i.test(command) && /\b(push|commit|send-pack|http-push)\b/i.test(command)) {
+    return deny('git.commit-push', 'a program on the command line that runs git push or git commit gets around the git rules: the console commits and pushes');
+  }
+  return undefined;
+}
+
 function evaluateShell(call: GuardCall, ctx: GuardContext): GuardDecision {
   const command = typeof call.input.command === 'string' ? call.input.command : '';
   const shell: ShellKind = call.tool === 'PowerShell' ? 'powershell' : 'posix';
   const segments = splitCommand(command, shell);
   const dl = downloadRule(segments);
   if (dl !== undefined) return dl;
+  const inline = interpreterGit(command, segments);
+  if (inline !== undefined) return inline;
   // Where the next command runs: a `cd ..` earlier in the same command moves every relative path after it.
   let cwd: string | null = ctx.worktree;
   const driveRoot = win32.parse(ctx.worktree).root;
@@ -343,7 +361,10 @@ function evaluateShell(call: GuardCall, ctx: GuardContext): GuardDecision {
       (name === 'git' && (s.env ?? []).some((e) => DANGEROUS_GIT_ENV.test(envName(e)))) ||
       (/^\$env:/i.test(s.argv[0] ?? '') && DANGEROUS_GIT_ENV.test(envName(s.argv[0]!))) ||
       ((name === 'set-item' || name === 'si') && /^env:/i.test(s.argv[1] ?? '') && DANGEROUS_GIT_ENV.test(envName(s.argv[1]!))) ||
-      (['export', 'set', 'setx'].includes(name) && s.argv.slice(1).some((a) => DANGEROUS_GIT_ENV.test(envName(a))));
+      (['export', 'set', 'setx', 'unset'].includes(name) && s.argv.slice(1).some((a) => DANGEROUS_GIT_ENV.test(envName(a)))) ||
+      // The session's push hook is passed in these variables: taking them away (unset, `env -u`, `env -i`, Remove-Item env:) would drop it.
+      (name === 'env' && s.argv.slice(1).some((a) => /^(-i|--ignore-environment|-0)$/.test(a) || /^(-u|--unset)/.test(a) || DANGEROUS_GIT_ENV.test(envName(a)))) ||
+      (['remove-item', 'ri', 'rm', 'del', 'rd'].includes(name) && s.argv.slice(1).some((a) => /^env:/i.test(a) && DANGEROUS_GIT_ENV.test(envName(a))));
     if (setsGitEnv) {
       return deny(ctx.role === 'main' ? 'git.hooks-tamper' : 'git.config-write', 'changing git\'s configuration through the environment would get around the console push hook');
     }

@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, appendFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { git } from './git';
+import { ignoreConsoleFolder, ignoreConsoleFolderAbove } from './console-folder';
 import { KeyedQueue } from '../keyed-queue';
 import { SLUG_RE } from '../../shared/slug';
 import { errorMessage } from '../../shared/guards';
@@ -47,12 +48,16 @@ async function ensureProjectBranchUnlocked(repo: string, project: string): Promi
   return { branch, created: true };
 }
 
-/** Keeps the console's own folder out of every commit, without touching the project's .gitignore. */
-export async function excludeConsoleFolder(repo: string): Promise<void> {
+/**
+ * Earlier versions kept the console's folder out of git with a line in the repository's `info/exclude`; the folder now carries its own
+ * `.gitignore` (`console-folder.ts`), so that line is taken away. Nothing else in the file is touched.
+ */
+export async function dropLegacyExclude(repo: string): Promise<void> {
   const file = join(await commonDir(repo), 'info', 'exclude');
-  mkdirSync(dirname(file), { recursive: true });
-  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  if (!text.split(/\r?\n/).some((l) => l.trim() === '.andromedaconsole/')) appendFileSync(file, `${text === '' || text.endsWith('\n') ? '' : '\n'}.andromedaconsole/\n`);
+  if (!existsSync(file)) return;
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/);
+  if (!lines.some((l) => l.trim() === '.andromedaconsole/')) return;
+  writeFileSync(file, lines.filter((l) => l.trim() !== '.andromedaconsole/').join('\n'));
 }
 
 export const agentBranchFor = (project: string, slug: string): string => `agent/${project}/${slug}`;
@@ -116,10 +121,11 @@ async function addWorktree(repo: string, path: string, args: string[], undo?: ()
   throw new GitError('git.failed', added.stderr.trim());
 }
 
-/** Keeps the console's folder out of the repository's status; when that fails the new worktree goes again (and `undo` runs). */
+/** Keeps the new worktree's console folder out of its status; when that fails the new worktree goes again (and `undo` runs). */
 async function excludeOrRollback(repo: string, path: string, undo?: () => Promise<unknown>): Promise<void> {
   try {
-    await excludeConsoleFolder(repo);
+    ignoreConsoleFolder(path);
+    ignoreConsoleFolderAbove(path);
   } catch (e) {
     await removeWorktree(repo, path);
     await undo?.();

@@ -1,7 +1,7 @@
 import { it, expect } from 'vitest';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
-import { ensureProjectBranch, createAgentWorktree, removeWorktree, GitError } from '../src/server/git/worktree';
+import { ensureProjectBranch, createAgentWorktree, dropLegacyExclude, removeWorktree, GitError } from '../src/server/git/worktree';
 import { git } from '../src/server/git/git';
 import { makeRepo, gitSync } from './git-helpers';
 
@@ -25,16 +25,26 @@ it('creates agent/<project>/<slug> from the project branch in a sibling folder, 
   expect(gitSync(wt.path, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('agent/shop-api/fix-login');
   expect(gitSync(wt.path, 'rev-parse', 'HEAD')).toBe(gitSync(repo, 'rev-parse', 'project/shop-api'));
 });
-it('ignores the .andromedaconsole folder through the repo exclude file, once', async () => {
+it('ignores the .andromedaconsole folder of a worktree through a .gitignore inside it, and writes nothing in the repo exclude file', async () => {
   const { repo } = makeRepo();
   await createAgentWorktree({ repo, project: 'p-one', slug: 'a-job' });
   await createAgentWorktree({ repo, project: 'p-one', slug: 'b-job' });
-  const exclude = readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8');
-  expect(exclude.split('\n').filter((l) => l.trim() === '.andromedaconsole/')).toHaveLength(1);
+  const exclude = join(repo, '.git', 'info', 'exclude');
+  expect(existsSync(exclude) ? readFileSync(exclude, 'utf8') : '').not.toContain('.andromedaconsole');
   const wt = join(dirname(repo), `${basename(repo)}.worktrees`, 'a-job');
-  mkdirSync(join(wt, '.andromedaconsole'));
+  expect(readFileSync(join(wt, '.andromedaconsole', '.gitignore'), 'utf8')).toBe('*\n');
   writeFileSync(join(wt, '.andromedaconsole', 'checklist.md'), 'x');
   expect(gitSync(wt, 'status', '--porcelain')).toBe('');
+});
+it('dropLegacyExclude takes the line of earlier versions away and keeps the rest of the file', async () => {
+  const { repo } = makeRepo();
+  const exclude = join(repo, '.git', 'info', 'exclude');
+  mkdirSync(dirname(exclude), { recursive: true });
+  writeFileSync(exclude, '# mine\n*.log\n.andromedaconsole/\n');
+  await dropLegacyExclude(repo);
+  expect(readFileSync(exclude, 'utf8')).toBe('# mine\n*.log\n');
+  await dropLegacyExclude(repo); // again: nothing to do
+  expect(readFileSync(exclude, 'utf8')).toBe('# mine\n*.log\n');
 });
 it('refuses an existing folder or branch and leaves nothing behind', async () => {
   const { repo } = makeRepo();
@@ -89,7 +99,6 @@ it('git() never throws and reports the exit code', async () => {
 });
 
 import { agentBranchFor, worktreePathFor, discardAgentWorktree, checkSpawnable } from '../src/server/git/worktree';
-import { installPushHook } from '../src/server/git/hooks';
 
 it('names the worktree and the branch in one place', () => {
   expect(agentBranchFor('shop-api', 'fix-login')).toBe('agent/shop-api/fix-login');
@@ -115,11 +124,11 @@ it('checkSpawnable sees a leftover branch and a leftover folder separately', asy
   mkdirSync(worktreePathFor(repo, 'only-folder'), { recursive: true });
   expect(await checkSpawnable({ repo, project: 'p-one', slug: 'only-folder' })).toBe('git.worktreeExists');
 });
-it('discardAgentWorktree removes folder, branch and hook folder, and is safe to repeat', async () => {
+it('discardAgentWorktree removes folder, branch and the hook folder of earlier versions, and is safe to repeat', async () => {
   const { repo } = makeRepo();
   const wt = await createAgentWorktree({ repo, project: 'p-one', slug: 'a-job' });
-  await installPushHook({ repo, worktree: wt.path, branch: wt.branch, slug: 'a-job' });
-  const hooks = join(repo, '.git', 'console-hooks', 'a-job');
+  const hooks = join(repo, '.git', 'console-hooks', 'a-job'); // where earlier versions kept the script
+  mkdirSync(hooks, { recursive: true });
   expect(existsSync(hooks)).toBe(true);
   await discardAgentWorktree({ repo, slug: 'a-job', branch: wt.branch, path: wt.path });
   expect(existsSync(wt.path)).toBe(false);
@@ -128,16 +137,11 @@ it('discardAgentWorktree removes folder, branch and hook folder, and is safe to 
   await discardAgentWorktree({ repo, slug: 'a-job', branch: wt.branch, path: wt.path });
 });
 
-it('four agents started at the same moment on a fresh repository all get their worktree and hook (review finding: project branch race)', async () => {
+it('four agents started at the same moment on a fresh repository all get their worktree (review finding: project branch race)', async () => {
   const { repo } = makeRepo();
   const slugs = ['first-job', 'second-job', 'third-job', 'fourth-job'];
-  const made = await Promise.all(slugs.map(async (slug) => {
-    const wt = await createAgentWorktree({ repo, project: 'p-one', slug });
-    await installPushHook({ repo, worktree: wt.path, branch: wt.branch, slug });
-    return wt;
-  }));
+  const made = await Promise.all(slugs.map((slug) => createAgentWorktree({ repo, project: 'p-one', slug })));
   expect(made.map((m) => m.branch).sort()).toEqual(slugs.map((s) => `agent/p-one/${s}`).sort());
-  for (const m of made) expect(gitSync(m.path, 'config', '--worktree', '--get', 'core.hooksPath')).toContain('console-hooks');
   expect(gitSync(repo, 'branch', '--list', 'project/*').trim()).toBe('project/p-one');
 });
 it('ensureProjectBranch called twice at once creates the branch once and reports success both times', async () => {

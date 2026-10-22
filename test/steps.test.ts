@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { branchesOf, gitSync, makeRepo, type TestRepo, removeDir } from './git-helpers';
 import { createAgentWorktree } from '../src/server/git/worktree';
-import { installPushHook } from '../src/server/git/hooks';
 import { DEFAULT_SECRET_PATTERNS } from '../src/server/git/secrets';
 import { TicketStore } from '../src/server/tickets/store';
 import { StepService, type StepResult } from '../src/server/tickets/steps';
@@ -33,7 +32,6 @@ async function setup(remote = true): Promise<void> {
   const w = await createAgentWorktree({ repo: t.repo, project: 'p', slug: 'a' });
   wt = w.path;
   branch = w.branch;
-  await installPushHook({ repo: t.repo, worktree: wt, branch, slug: 'a' });
   tickets = new TicketStore(t.repo);
   messages = [];
   command = PASS;

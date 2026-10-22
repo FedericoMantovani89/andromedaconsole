@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, rmdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { git } from './git';
-import { commonDir, excludeConsoleFolder, withRepoLock } from './worktree';
+import { commonDir, withRepoLock } from './worktree';
+import { ignoreConsoleFolderAbove } from './console-folder';
 import { KeyedQueue } from '../keyed-queue';
 import { canonicalFolder } from '../canonical-path';
 
@@ -119,7 +120,7 @@ export function prepareTryCheckouts(o: { projectRoot: string; project: string; r
             await git(step.repo.path, ['worktree', 'prune']);
             throw new TryError('try.failed', { reason: added.stderr.trim() });
           }
-          await excludeConsoleFolder(step.repo.path).catch(() => undefined); // already done when the project opened; cosmetic otherwise
+          ignoreConsoleFolderAbove(step.path); // the project's .andromedaconsole carries its own .gitignore
         }
       });
       out.push({ repo: step.repo.name, path: step.path, sha: step.sha });

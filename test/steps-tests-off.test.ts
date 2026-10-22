@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { makeRepo, type TestRepo, removeDir } from './git-helpers';
 import { createAgentWorktree } from '../src/server/git/worktree';
-import { installPushHook } from '../src/server/git/hooks';
 import { DEFAULT_SECRET_PATTERNS } from '../src/server/git/secrets';
 import { KeyedQueue } from '../src/server/keyed-queue';
 import { ProjectStore } from '../src/server/project-store';
@@ -31,7 +30,6 @@ let runTests: TestRunner;
 beforeEach(async () => {
   t = makeRepo({ remote: true });
   const w = await createAgentWorktree({ repo: t.repo, project: 'p', slug: 'a' });
-  await installPushHook({ repo: t.repo, worktree: w.path, branch: w.branch, slug: 'a' });
   store = new ProjectStore(t.repo);
   store.init('p');
   const c = new Container<Services>();

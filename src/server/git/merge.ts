@@ -1,9 +1,11 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { identityArgs } from './commit';
 import { git } from './git';
 import { KeyedQueue } from '../keyed-queue';
-import { commonDir, ensureProjectBranch, withRepoLock } from './worktree';
+import { ensureProjectBranch, withRepoLock } from './worktree';
+import { ignoreConsoleFolderAbove } from './console-folder';
 import type { ChangedFile } from '../tickets/report';
 import { errorMessage } from '../../shared/guards';
 import { canonicalFolder } from '../canonical-path';
@@ -74,6 +76,7 @@ export async function ensureProjectWorktree(repo: string, project: string, dir?:
       await git(repo, ['worktree', 'prune']);
       const added = await git(repo, ['worktree', 'add', '-q', fwd(path), branch]);
       if (added.code !== 0) return { ok: false, code: /already (checked out|used)/i.test(added.stderr) ? 'project_branch_checked_out' : 'git_failed', detail: added.stderr.trim() } as const;
+      ignoreConsoleFolderAbove(path); // the project's .andromedaconsole carries its own .gitignore
     }
     await git(path, ['merge', '--abort']); // fails when there is nothing to abort: fine
     await git(path, ['reset', '--hard', '-q']);
@@ -91,7 +94,7 @@ export type MergeOutcome = { ok: true; sha: string } | { ok: false; kind: 'confl
 
 /** Commits what a merge has staged, with a message the console wrote (through a file, so any text is safe). */
 async function commitStaged(cwd: string, message: string): Promise<{ ok: true } | { ok: false; detail: string }> {
-  const dir = join(await commonDir(cwd), 'console-hooks');
+  const dir = join(tmpdir(), 'andromedaconsole-merge'); // not in the repository: nothing of the console is left in its .git
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `merge-msg-${process.pid}-${Date.now()}.txt`);
   writeFileSync(file, message, 'utf8');
