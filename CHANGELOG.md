@@ -8,6 +8,9 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+### Changed
+- The desktop app moves from Electron 44 to Electron 45 (Chromium 156, Node 24.22): no preload, `safeStorage` or `window.open` use to migrate; `smoke:app` passes.
+
 ## [0.0.12] - 2026-10-22
 
 ### Changed
