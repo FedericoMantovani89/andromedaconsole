@@ -8,6 +8,8 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.13] - 2026-10-23
+
 ### Changed
 - The desktop app moves from Electron 44 to Electron 45 (Chromium 156, Node 24.22): no preload, `safeStorage` or `window.open` use to migrate; `smoke:app` passes.
 
@@ -514,7 +516,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.12...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.13...HEAD
+[0.0.13]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.9...v0.0.10
