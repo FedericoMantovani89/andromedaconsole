@@ -21,6 +21,10 @@ One coding agent can handle a task. Several at once create a different job: who 
 - **Cost under control.** Per-agent token budgets, loop detection and subscription-limit handling (sleep until the window resets, wake only the main).
 - **Closing the tab is safe.** The server owns every process; the browser only displays. A restart brings the main and the agents back.
 
+![The checklist an agent keeps: finished steps muted, the next one in bold](assets/screenshots/checklist.png)
+
+*The progress chip of an agent (here 3/5) opens the checklist it is keeping; the console commits each finished step.*
+
 ![The queue drawer with a question from an agent and its answers](assets/screenshots/queue.png)
 
 ### Why not just open several terminals, or use Claude Code's own features?

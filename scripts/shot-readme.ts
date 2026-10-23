@@ -74,6 +74,25 @@ try {
   await page.screenshot({ path: join(outDir, 'console.png') });
   console.log('console.png');
 
+  // The checklist an agent keeps: the demo agent writes none, so the endpoint answers with staged steps.
+  await page.route(/\/api\/agents\/dice-logic\/checklist(\?|$)/, (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ steps: [
+      { n: 1, title: 'DiceRoller.roll() returns a face', done: true },
+      { n: 2, title: 'Unit tests for the 1-6 range', done: true },
+      { n: 3, title: 'Seed the random source so a test can fix a roll', done: true },
+      { n: 4, title: 'Expose the last roll to the screen', done: false },
+      { n: 5, title: 'Run the module tests and deliver', done: false },
+    ] }),
+  }));
+  await page.getByText('3/5', { exact: true }).click();
+  await page.waitForSelector('.checklist-dialog');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(outDir, 'checklist.png') });
+  console.log('checklist.png');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+
   await page.click('#queue-btn');
   await page.waitForTimeout(800);
   await page.screenshot({ path: join(outDir, 'queue.png') });
