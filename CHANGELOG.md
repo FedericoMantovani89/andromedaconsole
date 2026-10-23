@@ -8,6 +8,12 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.14] - 2026-10-23
+
+### Changed
+- Dependencies: `dompurify` 3.4.17 (sanitizer fixes), `marked` 18.1.1, and the test tooling (`vitest` 5.0.5, `jsdom` 30.1.3, `playwright-core` 1.64.1, `@types/node` 26.6.5).
+- The README screenshots show the current interface, with a new one of an agent's checklist (`npm run shot:readme` stages it).
+
 ## [0.0.13] - 2026-10-23
 
 ### Changed
@@ -516,7 +522,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.13...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.14...HEAD
+[0.0.14]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.10...v0.0.11
