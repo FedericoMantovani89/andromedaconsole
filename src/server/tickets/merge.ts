@@ -203,9 +203,11 @@ export class MergeService {
     const leftText = left.length > 0 ? ` Not cleaned up: ${left.map((i) => what[i]).join(', ')}; the work is safe on the project branch.` : '';
     // What is left to do: the next step is named only when there is one (a release already waiting for the user needs nothing from the main).
     const approved = this.d.tickets.list().filter((t) => t.status === 'approved' && t.slug !== slug).map((t) => t.slug);
+    let waiting = false;
+    try { waiting = this.d.releasePending?.() === true; } catch { /* only the wording of the notice: the merge is done */ }
     const next = approved.length > 0
       ? ` Next: merge the other approved tickets (${approved.join(', ')}), then propose_release.`
-      : this.d.releasePending?.() ? '' : ' Next: propose_release.';
+      : waiting ? '' : ' Next: propose_release.';
     this.d.notifyMain(`Ticket "${slug}" was merged into project/${this.d.project} (${sha.slice(0, 7)}).${leftText}${next}`);
     return { status: 'merged', sha, ...(left.length > 0 ? { cleanup: { incomplete: left } } : {}) };
   }
