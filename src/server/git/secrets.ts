@@ -4,7 +4,8 @@ export const DEFAULT_SECRET_PATTERNS: string[] = [
   'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', 'credentials', 'credentials.json', 'credentials.yml', 'credentials.yaml', 'credentials.xml', 'credentials.toml',
 ];
 
-const TEMPLATE_SUFFIX = /\.(example|sample|template|dist)$/i;
+/** A file with one of these suffixes is a model for the real one (`.env.example`; `esempio` is the Italian word): no secret in it. */
+export const TEMPLATE_SUFFIX = /\.(example|esempio|sample|template|dist)$/i;
 const SPECIALS = /[.+^${}()|[\]\\]/g;
 
 const toRegExp = (pattern: string): RegExp =>

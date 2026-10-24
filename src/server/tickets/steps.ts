@@ -142,9 +142,10 @@ export class StepService {
     return result;
   }
 
-  reportBlocked(slug: string, reason: string): void {
+  /** `file`: where the whole reason is kept when `reason` is a shortened one. */
+  reportBlocked(slug: string, reason: string, file?: string): void {
     this.d.tickets.block(slug, reason);
-    this.d.notifyMain(slug, `Agent "${slug}" is blocked and waiting for you: ${reason}`);
+    this.d.notifyMain(slug, `Agent "${slug}" is blocked and waiting for you: ${reason}${file ? ` (full text: ${file})` : ''}`);
     this.d.changed();
   }
 

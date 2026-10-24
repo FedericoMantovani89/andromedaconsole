@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { win32 } from 'node:path';
-import { findSecrets, globMayMatchSecret } from '../git/secrets';
+import { findSecrets, globMayMatchSecret, TEMPLATE_SUFFIX } from '../git/secrets';
 import { baseName, hasComponent, isInside, realResolve, translatePath } from './paths';
 import { GIT_BUILTINS, headBranch, isTag } from './gitrefs';
 import { commandName, splitCommand, type Segment, type ShellKind } from './shell';
@@ -29,7 +29,6 @@ const MAIN_RULES = new Set(['git.force', 'git.delete-ref', 'git.tag', 'secret.fi
 const READONLY_SUBAGENTS = new Set(['explore', 'plan', 'claude-code-guide']);
 
 const PROTECTED_REF = /^(main|master|develop|trunk|release\/.+)$/;
-const TEMPLATE_SUFFIX = /\.(example|sample|template|dist)$/i;
 const FILE_READERS = new Set([
   'cat', 'type', 'less', 'more', 'head', 'tail', 'cp', 'copy', 'mv', 'move', 'scp', 'get-content', 'gc', 'select-string', 'sls',
   'grep', 'egrep', 'fgrep', 'rg', 'base64', 'xxd', 'od', 'strings', 'sed', 'awk', 'tar', 'zip', '7z', 'compress-archive',

@@ -1,12 +1,16 @@
 import { resolve } from 'node:path';
+import { archiveAgent } from '../../agents/archive';
 import { spawnAgent } from '../../agents/spawn';
 import { cleanupWorktree } from '../../git/cleanup';
 import type { Context } from '../../http';
 import { badRequest } from '../../tool-errors';
 import type { ProjectContainer } from '../services';
 
-/** The console tools that list, resume, clean up and spawn agents. */
-export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_agents' | 'resume_agent' | 'worktree_cleanup' | 'spawn_agent'> {
+/** The goal length list_agents gives by default to the main. */
+const SHORT_GOAL = 80;
+
+/** The console tools that list, resume, archive, clean up and spawn agents. */
+export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_agents' | 'resume_agent' | 'archive_agent' | 'worktree_cleanup' | 'spawn_agent'> {
   const { o } = k.get('env');
   const projectName = k.get('projectName');
   const registry = k.get('registry');
@@ -27,15 +31,27 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
     } catch { return {}; }
   };
   return {
-    list_agents: async (caller) => {
+    list_agents: async (caller, body) => {
+      const b = (typeof body === 'object' && body !== null ? body : {}) as { filter?: unknown; goal?: unknown };
+      if (b.filter !== undefined && b.filter !== 'active' && b.filter !== 'all') return badRequest('filter must be "active" or "all"');
+      if (b.goal !== undefined && b.goal !== 'short' && b.goal !== 'full') return badRequest('goal must be "short" or "full"');
+      const isMain = caller === projectName;
+      // The main asks again and again (every message may need a look): by default it gets what is in hand, in short. The others see everyone, in full.
+      const active = (b.filter ?? (isMain ? 'active' : 'all')) === 'active';
+      const goalMax = (b.goal ?? (isMain ? 'short' : 'full')) === 'short' ? SHORT_GOAL : 300;
       // The main also sees what only it can settle (escalated requests, questions to it): a restart or a lost message forgets nothing.
-      const held = caller === projectName ? requests.forMain() : [];
+      const held = isMain ? requests.forMain() : [];
       // An open release request waits for the user in the queue: the main sees it, so it does not ask again or forget it.
-      const pendingRelease = caller === projectName ? release.pendingRequest() : undefined;
+      const pendingRelease = isMain ? release.pendingRequest() : undefined;
+      const all = registry.list();
+      const shown = active ? all.filter((a) => !a.archived) : all;
+      const hidden = all.length - shown.length;
       return {
-        agents: registry.list().map((a) => ({
+        // Said when the filter left something out, so the main knows the list is not everything (filter: "all" shows it).
+        ...(hidden > 0 ? { archivedHidden: hidden } : {}),
+        agents: shown.map((a) => ({
           slug: a.slug, profile: a.profile, role: a.role, state: a.state,
-          ...(a.goal ? { goal: a.goal.length > 300 ? `${a.goal.slice(0, 300)}…` : a.goal } : {}),
+          ...(a.goal ? { goal: a.goal.length > goalMax ? `${a.goal.slice(0, goalMax)}…` : a.goal } : {}),
           ...(a.state === 'queued' ? { queuedPosition: scheduler.position(a.slug) } : {}),
           // Where the ticket is when it is not simply being written (suspended, delivered...): the main decides what to resume from it.
           ...(() => { const t = a.role === 'agent' ? ticketStatusOf(a.slug) : undefined; return t && t !== 'in_progress' ? { ticket: t } : {}; })(),
@@ -56,6 +72,18 @@ export function agentTools(k: ProjectContainer): Pick<Context['tools'], 'list_ag
         return badRequest('names must be a list of 1 to 50 agent names');
       }
       return resumer.resume(names);
+    },
+    // The main takes agents that are done out of the column and out of its own list (the same flag as the panel's button; nothing is closed or deleted).
+    archive_agent: async (_slug, body) => {
+      const names = (body as { names?: unknown } | null)?.names;
+      if (!Array.isArray(names) || names.length === 0 || names.length > 50 || !names.every((n): n is string => typeof n === 'string' && n !== '')) {
+        return badRequest('names must be a list of 1 to 50 agent names');
+      }
+      const results = names.map((name) => {
+        const out = archiveAgent({ registry, ticketStatus: ticketStatusOf }, name);
+        return out.ok ? { name, status: 'archived' as const } : { name, status: 'refused' as const, code: out.code };
+      });
+      return { status: 'ok', results };
     },
     // Phase 6A, SPEC 9.9: the console saves the work, pushes the branch and only then removes the folder; never a branch.
     worktree_cleanup: async (_slug, body) => {

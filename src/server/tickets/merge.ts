@@ -33,6 +33,8 @@ export interface MergeDeps {
   language(): { lang: string; t: Translate };
   authorAlive(slug: string): boolean;
   notifyMain(text: string): void;
+  /** A release request is waiting for the user's answer: the merge notice then does not tell the main to propose one. */
+  releasePending?(): boolean;
   /** Written as coming from the main (P8). */
   notifyAuthor(slug: string, text: string): void;
   /** The ticket cannot go on by itself: put the decision in the user's queue. */
@@ -199,7 +201,12 @@ export class MergeService {
     const left = await this.cleanUp(slug, author);
     const what: Record<CleanupItem, string> = { session: 'the agent\'s session', worktree: `its folder ${author.worktree}`, branch: `its local branch ${author.branch}` };
     const leftText = left.length > 0 ? ` Not cleaned up: ${left.map((i) => what[i]).join(', ')}; the work is safe on the project branch.` : '';
-    this.d.notifyMain(`Ticket "${slug}" was merged into project/${this.d.project} (${sha.slice(0, 7)}).${leftText} Next: merge the other approved tickets, then propose_release.`);
+    // What is left to do: the next step is named only when there is one (a release already waiting for the user needs nothing from the main).
+    const approved = this.d.tickets.list().filter((t) => t.status === 'approved' && t.slug !== slug).map((t) => t.slug);
+    const next = approved.length > 0
+      ? ` Next: merge the other approved tickets (${approved.join(', ')}), then propose_release.`
+      : this.d.releasePending?.() ? '' : ' Next: propose_release.';
+    this.d.notifyMain(`Ticket "${slug}" was merged into project/${this.d.project} (${sha.slice(0, 7)}).${leftText}${next}`);
     return { status: 'merged', sha, ...(left.length > 0 ? { cleanup: { incomplete: left } } : {}) };
   }
 

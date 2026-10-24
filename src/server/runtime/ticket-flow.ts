@@ -108,6 +108,7 @@ export function registerTicketFlow(c: ProjectContainer): void {
       language: reportLanguage,
       authorAlive: authorActive(k),
       notifyMain: (text) => { inbox.push(projectName, text); },
+      releasePending: () => k.get('release').pendingRequest() !== undefined,
       notifyAuthor: (slug, text) => { inbox.push(slug, text); },
       needsUser: (slug, reason) => { k.get('review').askUserAboutTicket(slug, reason); },
       merged: () => k.get('central').merged(),

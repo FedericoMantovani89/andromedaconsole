@@ -50,6 +50,7 @@ const TOOL_ROLES: Record<string, Role[]> = {
   recovery_report: ['recovery'],
   // After a usage limit only the main decides what to resume (SPEC 18.4); the console staggers it and checks the quota.
   resume_agent: ['main'],
+  archive_agent: ['main'],
   // Phase 6A (SPEC 9.9): the console saves, pushes and removes a stale worktree on the main's request.
   worktree_cleanup: ['main'],
   // SPEC 15.5: the mod posts the user's answer to the main's release dialog. No session has it as a tool, and it needs the release key.

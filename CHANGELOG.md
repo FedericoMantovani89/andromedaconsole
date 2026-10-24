@@ -8,6 +8,16 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+### Added
+- The main can archive agents that are done with the new tool `archive_agent {names}` (a finished agent, or an idle one whose ticket is delivered, merged or released): the same flag as the panel's button, nothing is closed or deleted.
+- `list_agents` takes `filter` (`active` / `all`) and `goal` (`short` / `full`). The main gets by default the agents that are not archived with the first 80 characters of each goal, plus `archivedHidden`; the other sessions get what they got before.
+
+### Changed
+- A file named `*.esempio` (`.env.esempio`) is a model like `.env.example`: the guard lets sessions read and edit it and the console may commit it. A real `.env` stays blocked.
+- The "Update documentation" step now tells the agent to write the details under `docs/` and to add to `CLAUDE.md` or `AGENTS.md` at most a one-line pointer.
+- The notice after `merge_ticket` names a next step only when there is one: the other approved tickets by name, or `propose_release`; with a release already waiting for the user it says nothing more.
+- A long reason of `report_blocked` reaches the main cut at a word and marked `[truncated]`, with the whole text kept in `.andromedaconsole/state/blocked/<agent>.md` and named in the message.
+
 ## [0.0.14] - 2026-10-23
 
 ### Changed

@@ -115,7 +115,7 @@ function startInboxPoll(/** @type {Engine} */ $) {
 
 /** @type {Record<string, string[]>} */
 const TOOLS_BY_ROLE = {
-  main: ['spawn_agent', 'list_agents', 'send_message', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release', 'start_recovery', 'resume_agent', 'worktree_cleanup'],
+  main: ['spawn_agent', 'list_agents', 'send_message', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup'],
   agent: ['list_agents', 'send_message', 'checklist_set', 'step_done', 'report_blocked'],
   reviewer: ['list_agents', 'review_verdict'],
   recovery: ['list_agents', 'recovery_report'],
@@ -149,7 +149,13 @@ const TOOL_SPECS = {
     description: 'List the sessions of this project: name, profile, state and goal, and the ticket status when it is not simply in progress '
       + '(for example suspended_limit or delivered), archived: true for one out of the agents column, and requests: { holding, asked } with the open requests (id, the other side, open or escalated) the session holds or is waiting on. Use it to know who exists before asking. '
       + 'For the main it also lists the open requests only it can settle (escalated requests) and, as release, the release request the user has not answered yet.',
-    inputSchema: { type: 'object', properties: {} },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filter: { type: 'string', enum: ['active', 'all'], description: 'active: leave out the archived agents (the default for the main; the answer then carries archivedHidden, how many were left out). all: everyone (the default for the others).' },
+        goal: { type: 'string', enum: ['short', 'full'], description: 'short: the first 80 characters of each goal (the default for the main). full: up to 300 characters (the default for the others).' },
+      },
+    },
   },
   send_message: {
     description: 'Send a message to the main session or to another agent of this project (list_agents shows who exists and what each one produces). '
@@ -204,7 +210,7 @@ const TOOL_SPECS = {
   },
   report_blocked: {
     description: 'Tell the main session you cannot go on, and why. The ticket shows as blocked until your next closed step.',
-    inputSchema: { type: 'object', properties: { reason: { type: 'string', description: 'What blocks you and what you need' } }, required: ['reason'] },
+    inputSchema: { type: 'object', properties: { reason: { type: 'string', description: 'What blocks you and what you need, in one or two sentences (the main is told the first 500 characters; a longer text is kept in a file)' } }, required: ['reason'] },
   },
   ticket_report: {
     description: 'Facts about a delivered ticket, from git and from the test run the console itself makes on the delivered commit: files changed, tests, checklist, '
@@ -280,6 +286,16 @@ const TOOL_SPECS = {
     inputSchema: {
       type: 'object',
       properties: { names: { type: 'array', items: { type: 'string' }, description: 'The suspended ticket (agent) names to resume' } },
+      required: ['names'],
+    },
+  },
+  archive_agent: {
+    description: 'Take agents that are done out of the agents column and out of the default list_agents answer: a finished one, or an idle one whose ticket is delivered, merged or released '
+      + '(for example a research ticket that was never merged). Only a flag moves: the session, worktree, branch, ticket and transcript stay, and new work for the agent brings it back. '
+      + 'Returns { status: "ok", results: [{ name, status: "archived" | "refused", code? }] }; agent.notArchivable means it still has work or waits for a decision.',
+    inputSchema: {
+      type: 'object',
+      properties: { names: { type: 'array', items: { type: 'string' }, description: 'The agent (ticket) names to archive' } },
       required: ['names'],
     },
   },
@@ -443,7 +459,8 @@ function toolBody(/** @type {string} */ name, /** @type {Ev} */ e) {
   if (name === 'review_verdict') return { pass: e.pass, notes: e.notes };
   if (name === 'start_recovery') return { name: e.name };
   if (name === 'recovery_report') return { verified_steps: e.verified_steps, diagnosis: e.diagnosis, remedy: e.remedy, notes: e.notes };
-  if (name === 'resume_agent') return { names: e.names };
+  if (name === 'resume_agent' || name === 'archive_agent') return { names: e.names };
+  if (name === 'list_agents') return { filter: e.filter, goal: e.goal };
   if (name === 'worktree_cleanup') return { name: e.name, action: e.action };
   return {};
 }
@@ -634,6 +651,7 @@ export const register = (on) => {
   on('tool.call', { tool: 'mcp__console-mod__recovery_report' }, ($, e) => onConsoleTool($, 'recovery_report', e));
   on('session.measure', ($, e, next) => onMeasure($, e, next));
   on('tool.call', { tool: 'mcp__console-mod__resume_agent' }, ($, e) => onConsoleTool($, 'resume_agent', e));
+  on('tool.call', { tool: 'mcp__console-mod__archive_agent' }, ($, e) => onConsoleTool($, 'archive_agent', e));
   on('tool.call', { tool: 'mcp__console-mod__worktree_cleanup' }, ($, e) => onConsoleTool($, 'worktree_cleanup', e));
   on('tool.call', { tool: 'Task' }, ($, e, next) => guardCall($, 'Task', e, next)); // the older name of the Agent tool
   on('tool.call', { tool: 'mcp__console-mod__send_message' }, ($, e) => onConsoleTool($, 'send_message', e));

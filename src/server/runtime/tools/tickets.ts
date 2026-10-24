@@ -1,4 +1,7 @@
 import type { Context } from '../../http';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { clipText } from '../../clip';
 import { badRequest } from '../../tool-errors';
 import { parseAgentTests } from '../../tickets/agent-tests';
 import type { AgentTests } from '../../tickets/store';
@@ -9,6 +12,8 @@ import type { ProjectContainer } from '../services';
  * the host cuts a request that stays open for about a minute. The mod asks again on "running".
  */
 const TOOL_WAIT_MS = 15_000;
+/** The longest reason of report_blocked the main is told (a longer one is cut at a word, marked, and kept whole in a file). */
+const BLOCKED_REASON_MAX = 500;
 
 /** The console tools of a ticket's life: steps, review, recovery, release and merge. */
 export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checklist_set' | 'step_done' | 'report_blocked' | 'ticket_report' | 'request_review' | 'send_back_ticket' | 'review_verdict' | 'propose_release' | 'release_answer' | 'start_recovery' | 'recovery_report' | 'merge_ticket'> {
@@ -42,7 +47,14 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
     report_blocked: async (slug, body) => {
       const reason = (body as { reason?: unknown } | null)?.reason;
       if (typeof reason !== 'string' || reason.trim() === '') return badRequest('reason is required');
-      steps.reportBlocked(slug, reason.trim().slice(0, 500));
+      const text = reason.trim();
+      // A long reason reaches the main short; the whole of it is kept in a file the message names.
+      let file: string | undefined;
+      if (text.length > BLOCKED_REASON_MAX) {
+        const dir = join(k.get('env').o.projectRoot, '.andromedaconsole', 'state', 'blocked');
+        try { mkdirSync(dir, { recursive: true }); file = join(dir, `${slug}.md`); writeFileSync(file, `${text}\n`); } catch { file = undefined; }
+      }
+      steps.reportBlocked(slug, clipText(text, BLOCKED_REASON_MAX), file);
       return { status: 'ok' };
     },
     ticket_report: async (_slug, body) => {

@@ -37,7 +37,7 @@ it('the manifest names the plugin console-mod (tool names are mcp__console-mod__
 it('the Phase 5 hooks are registered by name in the module', () => {
   const src = readFileSync(join(modDir, 'hooks', 'register.js'), 'utf8');
   expect(src).toContain("on('session.measure'");
-  for (const tool of ['start_recovery', 'recovery_report', 'resume_agent', 'worktree_cleanup']) expect(src, tool).toContain(`{ tool: 'mcp__console-mod__${tool}' }`);
+  for (const tool of ['start_recovery', 'recovery_report', 'resume_agent', 'archive_agent', 'worktree_cleanup']) expect(src, tool).toContain(`{ tool: 'mcp__console-mod__${tool}' }`);
   expect(src).toContain('$.session.usage()');
 });
 

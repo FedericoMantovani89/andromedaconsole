@@ -40,12 +40,63 @@ it('follows events and a dead process', async () => {
   await until(async () => (await state(s)).agents[0].state === 'interrupted');
   expect((await list(s, 'shop-api')).find((a: any) => a.slug === 'fix-login').state).toBe('interrupted');
 });
-it('long goals are truncated to 300 characters', async () => {
+it('long goals are truncated: 80 characters for the main, 300 with goal "full" and for the others', async () => {
   const s = await bootServer();
   await spawn(s, 'long-goal', 'g'.repeat(1000));
-  const goal = (await list(s, 'shop-api')).find((a: any) => a.slug === 'long-goal').goal as string;
-  expect(goal.length).toBeLessThanOrEqual(301);
-  expect(goal.endsWith('…')).toBe(true);
+  const goalOf = (agents: any[]) => agents.find((a: any) => a.slug === 'long-goal').goal as string;
+  const short = goalOf(await list(s, 'shop-api'));
+  expect(short.length).toBe(81);
+  expect(short.endsWith('…')).toBe(true);
+  const full = goalOf((await mod(s, 'shop-api', '/v1/tools/list_agents', 'POST', { goal: 'full' })).body.agents);
+  expect(full.length).toBe(301);
+  expect(goalOf(await list(s, 'long-goal')).length).toBe(301);
+});
+it('the main gets the active agents by default and says how many archived ones it did not get; filter "all" shows them', async () => {
+  const { s, t } = await boot();
+  await mergedTicket(s, t, 'old-job'); // merged: its session ended for good and it is archived
+  await spawn(s, 'new-job', 'going');
+  const slugs = (agents: any[]) => agents.map((a: any) => a.slug);
+  const asked = (await tool(s, 'shop-api', 'list_agents', {})).body;
+  expect(slugs(asked.agents)).toContain('new-job');
+  expect(slugs(asked.agents)).not.toContain('old-job');
+  expect(asked.archivedHidden).toBeGreaterThanOrEqual(1);
+  const all = (await tool(s, 'shop-api', 'list_agents', { filter: 'all' })).body;
+  expect(slugs(all.agents)).toEqual(expect.arrayContaining(['shop-api', 'old-job', 'new-job']));
+  expect(all.archivedHidden).toBeUndefined();
+  expect(slugs(await list(s, 'new-job'))).toContain('old-job'); // the others see everyone
+  expect((await tool(s, 'shop-api', 'list_agents', { filter: 'some' })).body).toMatchObject({ status: 'error', code: 'bad_request' });
+  // The reviewer's process ends a moment after the merge; once it has, it leaves the main's list too.
+  await until(async () => !slugs((await tool(s, 'shop-api', 'list_agents', {})).body.agents).includes('review-old-job'));
+  expect(slugs((await tool(s, 'shop-api', 'list_agents', {})).body.agents)).toEqual(['shop-api', 'new-job']);
+}, 120_000);
+it('archive_agent archives a delivered ticket that sits idle; the default list then leaves it out and filter "all" keeps it', async () => {
+  const { s, t } = await boot();
+  const slug = 'research-job';
+  await tool(s, 'shop-api', 'spawn_agent', { name: slug, profile: 'developer', goal: 'Study something' });
+  await modEvent(s, slug, 'session.start');
+  await modEvent(s, slug, 'turn.start');
+  await tool(s, slug, 'checklist_set', { items: ITEMS });
+  const wt = worktreePathFor(t.repo, slug);
+  writeFileSync(join(wt, 'notes.md'), 'notes\n');
+  for (let n = 1; n <= 6; n++) {
+    if (n === 6) writeFileSync(join(wt, 'README.md'), 'docs\n');
+    await tool(s, slug, 'step_done', { n, note: 'a decent note for this step' });
+  }
+  await modEvent(s, slug, 'turn.complete');
+  const listed = async (body: object) => (await tool(s, 'shop-api', 'list_agents', body)).body.agents.map((a: any) => a.slug);
+  expect(await listed({})).toContain(slug);
+  expect((await tool(s, 'shop-api', 'archive_agent', { names: [slug] })).body).toEqual({ status: 'ok', results: [{ name: slug, status: 'archived' }] });
+  expect(await listed({})).not.toContain(slug);
+  expect(await listed({ filter: 'all' })).toContain(slug);
+}, 120_000);
+it('archive_agent: the main archives agents that are done, a working one is refused, agents may not call it', async () => {
+  const s = await bootServer();
+  s.setLimits({ global: 9, perProject: 9 });
+  await spawn(s, 'busy-job', 'working');
+  const out = (await mod(s, 'shop-api', '/v1/tools/archive_agent', 'POST', { names: ['busy-job', 'nobody'] })).body;
+  expect(out).toEqual({ status: 'ok', results: [{ name: 'busy-job', status: 'refused', code: 'agent.notArchivable' }, { name: 'nobody', status: 'refused', code: 'not_found' }] });
+  expect((await mod(s, 'shop-api', '/v1/tools/archive_agent', 'POST', { names: [] })).body).toMatchObject({ status: 'error', code: 'bad_request' });
+  expect((await mod(s, 'busy-job', '/v1/tools/archive_agent', 'POST', { names: ['busy-job'] })).status).toBe(403);
 });
 it('needs a session token', async () => {
   const s = await bootServer();

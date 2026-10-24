@@ -31,7 +31,7 @@ let runs: number;
 let testDelayMs: number;
 let testsPass: boolean;
 
-function service(): MergeService {
+function service(extra: Partial<MergeDeps> = {}): MergeService {
   const deps: MergeDeps = {
     tickets, root: t.repo, project: 'p',
     worktreeOf: (slug) => worktrees.get(slug),
@@ -47,6 +47,7 @@ function service(): MergeService {
     notifyAuthor: () => {},
     needsUser: () => {},
     finishAgent: async () => { if (finishFails) throw new Error('cannot stop'); },
+    ...extra,
   };
   return new MergeService(deps);
 }
@@ -167,5 +168,31 @@ describe('merge_ticket as a detached job', () => {
     expect(notice).toMatch(/session/);
     expect(notice).not.toMatch(/completely/);
     expect(await svc.mergeTicket('a-job', { waitMs: 50 })).toMatchObject({ status: 'merged', sha: projectTip() });
+  });
+
+  describe('the notice to the main names a next step only when there is one', () => {
+    it('another approved ticket is waiting: it is named', async () => {
+      await approvedTicket('a-job', { 'src/a.js': 'a\n' });
+      await approvedTicket('b-job', { 'src/b.js': 'b\n' });
+      testDelayMs = 0;
+      await service().mergeTicket('a-job', { waitMs: 15_000 });
+      expect(main.find((m) => m.includes('was merged'))).toMatch(/Next: merge the other approved tickets \(b-job\), then propose_release\./);
+    });
+
+    it('nothing else is approved: only the release is left', async () => {
+      await approvedTicket('a-job', { 'src/a.js': 'a\n' });
+      testDelayMs = 0;
+      await service().mergeTicket('a-job', { waitMs: 15_000 });
+      const notice = main.find((m) => m.includes('was merged'))!;
+      expect(notice).toMatch(/Next: propose_release\.$/);
+      expect(notice).not.toMatch(/approved tickets/);
+    });
+
+    it('a release already waits for the user: no next step', async () => {
+      await approvedTicket('a-job', { 'src/a.js': 'a\n' });
+      testDelayMs = 0;
+      await service({ releasePending: () => true }).mergeTicket('a-job', { waitMs: 15_000 });
+      expect(main.find((m) => m.includes('was merged'))).not.toMatch(/Next:/);
+    });
   });
 });

@@ -26,7 +26,7 @@ export const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/;
 /** The console's own tools an agent may call without a permission prompt. */
 export const AGENT_TOOLS = ['list_agents', 'send_message', 'checklist_set', 'step_done', 'report_blocked'].map((t) => `mcp__console-mod__${t}`);
 /** What the main may call without a permission prompt: every tool the mod registers for the main, plus `ask_user` (native question of the main). */
-export const MAIN_TOOLS = ['spawn_agent', 'list_agents', 'ask_user', 'send_message', 'start_recovery', 'resume_agent', 'worktree_cleanup', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release'].map((t) => `mcp__console-mod__${t}`);
+export const MAIN_TOOLS = ['spawn_agent', 'list_agents', 'ask_user', 'send_message', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release'].map((t) => `mcp__console-mod__${t}`);
 export const REVIEWER_TOOLS = ['list_agents', 'review_verdict'].map((t) => `mcp__console-mod__${t}`);
 export const RECOVERY_TOOLS = ['list_agents', 'recovery_report'].map((t) => `mcp__console-mod__${t}`);
 
