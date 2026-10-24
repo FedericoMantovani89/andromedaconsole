@@ -8,6 +8,8 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.15] - 2026-10-24
+
 ### Added
 - The main can archive agents that are done with the new tool `archive_agent {names}` (a finished agent, or an idle one whose ticket is delivered, merged or released): the same flag as the panel's button, nothing is closed or deleted.
 - `list_agents` takes `filter` (`active` / `all`) and `goal` (`short` / `full`). The main gets by default the agents that are not archived with the first 80 characters of each goal, plus `archivedHidden`; the other sessions get what they got before.
@@ -532,7 +534,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.14...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.15...HEAD
+[0.0.15]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.11...v0.0.12
