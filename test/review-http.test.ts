@@ -20,7 +20,7 @@ async function boot(o: { afterWorktree?: (slug: string) => void | Promise<void> 
   const s = await bootServer({ projectRoot: t.repo, config: { git: { worktrees: true } }, afterWorktreeCreated: o.afterWorktree });
   s.setLimits({ global: 20, perProject: 20 }); // fake agents never report events, so they stay active and would hold the slots
   const file = join(t.repo, '.andromedaconsole', 'project.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), testCommand: 'node -e "process.exit(0)"' }));
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), testCommand: 'node -e "process.exit(0)"', squash: true }));
   return { s, t };
 }
 const tool = (s: Running, slug: string, name: string, body: unknown = {}) => mod(s, slug, `/v1/tools/${name}`, 'POST', body);
