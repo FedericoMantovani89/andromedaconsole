@@ -8,6 +8,11 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.17] - 2026-10-28
+
+### Fixed
+- No change to the product: 0.0.16 was tagged before the test of the single-commit merge was updated to the new default (real merge), so 0.0.17 is the first version of it whose tag has a green CI.
+
 ## [0.0.16] - 2026-10-28
 
 ### Changed
@@ -539,7 +544,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.16...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.17...HEAD
+[0.0.17]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.13...v0.0.14
