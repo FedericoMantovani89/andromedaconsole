@@ -46,7 +46,7 @@ it('rejects a test command that is too long or not a string', () => {
   expect(() => s.setTestCommand('a\nb')).toThrow('project.testCommandInvalid');
 });
 
-it('squash is on unless the project says false, and the choice is kept next to the other options', () => {
+it('squash is off unless the project says true, and the choice is kept next to the other options', () => {
   const root = repo(); const s = new ProjectStore(root); s.init('shop-api');
   expect(s.project.squash).toBeUndefined();
   s.setSquash(false);

@@ -151,6 +151,8 @@ try {
   // 3. Merge in series; a conflict is never forced; the author is told and gets a ready conflict state
   {
     const { s, t, tool, deliver, inbox } = await boot();
+    const projectFile = join(t.repo, '.andromedaconsole', 'project.json');
+    writeFileSync(projectFile, JSON.stringify({ ...JSON.parse(readFileSync(projectFile, 'utf8')), squash: true })); // merges are a real merge by default
     const page = await open(`${s.url}/?token=${s.token}`);
     await until(async () => (await page.locator(`${panel('shop-api')} .xterm`).count()) > 0);
     await deliver('first-job', { 'src-a.js': 'a\n', 'shared.js': 'line from first\n' }, 'First change');
@@ -238,10 +240,10 @@ try {
     await until(async () => (await page.locator(`${panel('shop-api')} .xterm`).count()) > 0);
     await page.click('#settings-btn');
     await page.click('.options-tab[data-tab="projects"]');
-    check('the squash switch starts on', await page.locator('input[name="squash"]').isChecked());
-    await page.uncheck('input[name="squash"]');
+    check('the squash switch starts off', !(await page.locator('input[name="squash"]').isChecked()));
+    await page.check('input[name="squash"]');
     await page.click('button[name="saveOptions"]');
-    check('turning it off is saved in the project', await until(() => JSON.parse(readFileSync(join(t.repo, '.andromedaconsole', 'project.json'), 'utf8')).squash === false));
+    check('turning it on is saved in the project', await until(() => JSON.parse(readFileSync(join(t.repo, '.andromedaconsole', 'project.json'), 'utf8')).squash === true));
     await page.close();
     await s.close();
   }

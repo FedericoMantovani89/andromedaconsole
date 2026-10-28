@@ -8,6 +8,11 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.16] - 2026-10-28
+
+### Changed
+- A ticket is now merged into the project branch with a real merge commit by default (the agent's branch becomes an ancestor of `main` after the release, so Git no longer lists it as unmerged); the squash switch in Options, Project is off unless a project has it saved as on, and its label and tooltip say what each position does. A project with no saved choice moves from squash to merge.
+
 ## [0.0.15] - 2026-10-24
 
 ### Added
@@ -534,7 +539,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.15...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.16...HEAD
+[0.0.16]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.12...v0.0.13

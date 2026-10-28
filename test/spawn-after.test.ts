@@ -195,6 +195,8 @@ const projectWorktree = (repo: string): string => {
 
 it('a dependent ticket is squash-merged with its own work only, even when the other agent changed its files after it started', async () => {
   const { s, t } = await boot();
+  const projectFile = join(t.repo, '.andromedaconsole', 'project.json');
+  writeFileSync(projectFile, JSON.stringify({ ...JSON.parse(readFileSync(projectFile, 'utf8')), squash: true }));
   await spawn(s, 'dba-schema');
   await commitFirstStep(s, t, 'dba-schema', 'migration.sql');
   await spawn(s, 'be-api', { after: 'dba-schema' });
@@ -246,6 +248,8 @@ it('with squash off the dependent ticket is merged as before: the other agent\'s
 
 it('a real overlap of a dependent ticket with another merged ticket still goes through the conflict flow, and the project branch stays clean', async () => {
   const { s, t } = await boot();
+  const projectFile = join(t.repo, '.andromedaconsole', 'project.json');
+  writeFileSync(projectFile, JSON.stringify({ ...JSON.parse(readFileSync(projectFile, 'utf8')), squash: true }));
   await spawn(s, 'dba-schema');
   await commitFirstStep(s, t, 'dba-schema', 'migration.sql');
   await spawn(s, 'be-api', { after: 'dba-schema' });

@@ -367,7 +367,7 @@ function projectsTab(env: Env): HTMLElement {
   const squash = el('input');
   squash.type = 'checkbox';
   squash.name = 'squash';
-  squash.checked = state?.project.squash !== false; // one commit per merged ticket unless the project says otherwise
+  squash.checked = state?.project.squash === true; // a real merge commit per ticket unless the project asks for one squashed commit
   const squashText = el('span');
   bindText(squashText, 'settings.squash');
   squashRow.append(squash, squashText, infoIcon(k('settings.squash.help')));

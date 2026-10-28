@@ -104,7 +104,7 @@ export function registerTicketFlow(c: ProjectContainer): void {
       runTests: testRunnerAt('merge'),
       testsDisabled,
       testTimeoutMs: () => runtime.git.testTimeoutMinutes * 60_000,
-      squash: () => store.project.squash !== false,
+      squash: () => store.project.squash === true,
       language: reportLanguage,
       authorAlive: authorActive(k),
       notifyMain: (text) => { inbox.push(projectName, text); },
