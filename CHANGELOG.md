@@ -8,9 +8,12 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.18] - 2026-11-10
+
 - Added a trash button on an agent's panel that closes a stuck agent and archives it by force (state finished, ticket untouched); it shows only where "Archive" is not offered.
 - Every button of the UI is now an icon with its words in the mouse-over, and every dialog, drawer and overlay closes with a red dot (the X shows on hover); the build fails on a new text-only button.
 - Renamed the console's MCP server from `console-mod` to `andromeda-mcp` (tools are now `mcp__andromeda-mcp__*`); sessions started before the update must be restarted.
+- Updated the dependencies (marked, ws, electron 45.2.3, electron-builder, electron-updater, playwright-core, vitest, @types/node).
 
 ## [0.0.17] - 2026-10-28
 
@@ -548,7 +551,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.17...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.18...HEAD
+[0.0.18]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.17...v0.0.18
 [0.0.17]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.14...v0.0.15
