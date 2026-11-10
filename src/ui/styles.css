@@ -48,8 +48,8 @@ button[disabled] { opacity: .45; cursor: default; }
 #tabs .tab:hover { color: var(--text); background: var(--raised); }
 #tabs .tab.current { color: var(--text); border-bottom-color: var(--accent); }
 #tabs .tab[disabled] { opacity: .5; cursor: default; }
-#tabs .tab-close { padding: 0 6px; margin-left: -8px; font-size: 11px; color: var(--muted); }
-#tabs .tab-close:hover { color: var(--bad); background: transparent; }
+#tabs .tab-close { align-self: center; flex: 0 0 auto; width: 11px; height: 11px; margin: 0 8px 0 -6px; }
+#tabs .tab-close svg { width: 8px; height: 8px; }
 #tabs .tab.tab-add { font-size: 18px; font-weight: 700; padding: 0 12px; }
 #tabs .tab.attention::after { content: ""; width: 7px; height: 7px; margin-left: 8px; border-radius: 50%; background: var(--warn); }
 #actions { display: flex; gap: 8px; flex: 0 0 auto; }
@@ -227,6 +227,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 #overlay[hidden] { display: none; }
 .dialog { width: min(560px, 92vw); max-width: 92vw; background: var(--surface); border: 1px solid var(--seam-strong);
   border-radius: 8px; padding: 22px 24px; display: grid; gap: 14px; box-shadow: 0 20px 56px rgba(0, 0, 0, .55); }
+.dialog { position: relative; }
 .dialog h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .dialog form { display: grid; gap: 14px; }
 .dialog label:not(.settings-switch) { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
@@ -351,9 +352,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 
 /* Options dialog: close X, icon buttons, the info tooltip icon and the footnote. */
 .options-dialog { position: relative; }
-.options-dialog > .dialog-x { position: absolute; grid-area: auto; top: 12px; right: 14px; margin: 0; z-index: 1; justify-self: auto; }
 .icon-btn, .options-panel button.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: 0 0 30px; padding: 0 !important; font-size: 18px; line-height: 1; }
-.dialog-x::before { content: "\00d7"; font-size: 22px; }
 .icon-refresh { color: var(--ok, #4cc38a); }
 .icon-refresh::before { content: "\21bb"; font-size: 18px; }
 .options-select-row { display: flex; gap: 8px; align-items: center; }
@@ -474,7 +473,6 @@ input[type="checkbox"] { accent-color: var(--accent); }
 
 /* Voice dictation: a roomy text box, a recording state, the Send button as the main action */
 .dictation-dialog { position: relative; width: min(640px, 92vw); }
-.dictation-dialog > .dialog-x { position: absolute; top: 12px; right: 14px; margin: 0; z-index: 1; }
 .dictation-body { display: grid; gap: 10px; }
 .dictation-dialog textarea { resize: vertical; min-height: 9rem; font: inherit; line-height: 1.45; }
 .dictation-meter { display: flex; align-items: center; gap: 12px; }
@@ -492,3 +490,12 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .options-secret-status { display: flex; align-items: center; gap: 8px; }
 .options-secret-status .secret-state { font-weight: 600; }
 .options-secret-status .secret-state.willclear { color: var(--warn); }
+
+/* The red close dot of dialogs, drawers and overlays: the X shows on hover and keyboard focus. */
+.close-dot { position: relative; width: 14px; height: 14px; min-width: 0; padding: 0 !important; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .25); background: var(--bad); color: rgba(60, 0, 0, .85); display: inline-flex; align-items: center; justify-content: center; line-height: 1; cursor: pointer; }
+.close-dot::after { content: ""; position: absolute; inset: -6px; } /* a bigger hit area than the dot */
+.close-dot svg { width: 10px; height: 10px; opacity: 0; transition: opacity .1s; }
+.close-dot:hover svg, .close-dot:focus-visible svg { opacity: 1; }
+.close-dot:hover { filter: brightness(1.1); background: var(--bad); }
+.dialog > .close-dot, .options-dialog > .close-dot, .dictation-dialog > .close-dot { position: absolute; grid-area: auto; margin: 0; justify-self: auto; top: 21px; right: 20px; z-index: 1; }
+.drawer-head .close-dot, .panel-head .close-dot { margin-left: auto; }

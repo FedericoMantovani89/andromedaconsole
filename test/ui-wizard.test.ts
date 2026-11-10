@@ -31,7 +31,7 @@ describe('first-start wizard', () => {
     expect([...document.querySelectorAll<HTMLOptionElement>('#overlay select option')].map((o) => o.value)).toEqual(['en', 'it']);
     expect(document.querySelector<HTMLSelectElement>('#overlay select')!.value).toBe('en'); // a saved "auto" shows English
     expect(back()).toBeNull();
-    expect([...document.querySelectorAll('#overlay button')].map((b) => b.getAttribute('data-i18n'))).toEqual(['common.next']);
+    expect([...document.querySelectorAll('#overlay button')].map((b) => b.getAttribute('data-i18n-title'))).toEqual(['common.next']);
   });
 
   it('Back on the left, the recheck button in the middle, Next on the right; with a repository the prerequisites are the last step', async () => {
@@ -40,9 +40,9 @@ describe('first-start wizard', () => {
     await flush();
     expect(title()).toBe('wizard.step.prerequisites');
     expect(cell(1).querySelector('button')).toBe(back());
-    expect(cell(2).querySelector('button')!.dataset.i18n).toBe('prereq.recheck');
+    expect(cell(2).querySelector('button')!.dataset.i18nTitle).toBe('prereq.recheck');
     expect(cell(3).querySelector('button')).toBe(next());
-    expect(next().dataset.i18n).toBe('wizard.finish');
+    expect(next().dataset.i18nTitle).toBe('wizard.finish');
     back()!.click();
     await flush();
     expect(title()).toBe('wizard.step.language');
@@ -54,12 +54,12 @@ describe('first-start wizard', () => {
     expect(progress()).toEqual({ n: 1, total: 3 });
     next().click();
     await flush();
-    expect(next().dataset.i18n).toBe('common.next');
+    expect(next().dataset.i18nTitle).toBe('common.next');
     next().click();
     await flush();
     expect(title()).toBe('wizard.step.git');
     expect(document.querySelector('#overlay button[name="gitInit"]')).not.toBeNull();
-    expect(next().dataset.i18n).toBe('wizard.finish');
+    expect(next().dataset.i18nTitle).toBe('wizard.finish');
     document.querySelector<HTMLButtonElement>('#overlay button[name="gitInit"]')!.click();
     await flush();
     expect(posts).toContain('/api/projects/git-init');

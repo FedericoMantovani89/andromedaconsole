@@ -2,6 +2,8 @@ import { api } from './api';
 import { bindText, k, setPlaceholder } from './i18n-client';
 import { renderInto } from './markdown-lazy';
 import { el } from './dom';
+import { closeDot } from './close-dot';
+import { setIconButton } from './icons';
 
 export interface ReadingEntry { n: number; at: string; text: string; truncated?: true }
 
@@ -15,9 +17,8 @@ export function createReader(root: HTMLElement) {
   const search = el('input');
   setPlaceholder(search, 'reader.search');
   const copy = el('button');
-  bindText(copy, 'reader.copy');
-  const close = el('button');
-  bindText(close, 'common.close');
+  setIconButton(copy, 'copy', 'reader.copy');
+  const close = closeDot();
   head.append(title, search, copy, close);
 
   const body = el('div', 'reader-body');

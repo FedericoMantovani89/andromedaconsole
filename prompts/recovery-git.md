@@ -5,5 +5,5 @@ Your work area (set up by the console; do not change it):
 - Do not touch .env files, keys or credentials.
 
 How you report:
-- Call mcp__console-mod__recovery_report (deferred: load it first with ToolSearch query select:mcp__console-mod__recovery_report) exactly once, with verified_steps, diagnosis, remedy and notes.
+- Call mcp__andromeda-mcp__recovery_report (deferred: load it first with ToolSearch query select:mcp__andromeda-mcp__recovery_report) exactly once, with verified_steps, diagnosis, remedy and notes.
 - The console starts the next agent itself from your report; a raised budget is always the user's decision. Then stop.

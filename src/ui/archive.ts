@@ -3,9 +3,11 @@ import { canArchive } from '../shared/archive';
 import type { SessionInfo, StateMessage } from '../shared/protocol';
 import { api } from './api';
 import { STATE_KEYS, TICKET_KEYS } from './chips';
-import { bindText, k } from './i18n-client';
+import { bindText, k, t } from './i18n-client';
+import { setIconButton } from './icons';
 import { closeOverlay } from './settings';
 import { el } from './dom';
+import { closeDot } from './close-dot';
 
 /** The agents the column shows: the archived ones are in the state in full, but only the archive list draws them. */
 export const visibleAgents = (agents: SessionInfo[]): SessionInfo[] => agents.filter((a) => !a.archived);
@@ -19,15 +21,35 @@ export function createArchiveButton(slug: string): HTMLButtonElement {
   b.type = 'button';
   b.className = 'panel-archive';
   b.hidden = true;
-  bindText(b, k('panel.archive'));
+  setIconButton(b, 'archive', k('panel.archive'));
   b.addEventListener('mousedown', (ev) => ev.preventDefault()); // a button here must not take the keyboard
   b.addEventListener('click', (ev) => { ev.stopPropagation(); void api(`/api/agents/${slug}/archive`, { method: 'POST' }).catch(() => undefined); });
   return b;
 }
 
+/** The trash button of an agent's panel: closes it and archives it by force, for one that got stuck. Shown only where "Archive" is not offered. */
+export function createForceArchiveButton(slug: string, role: SessionInfo['role']): HTMLButtonElement {
+  const b = el('button');
+  b.type = 'button';
+  b.className = 'panel-read panel-force-archive';
+  b.dataset.role = role;
+  b.hidden = true;
+  setIconButton(b, 'trash', k('panel.forceArchive'));
+  b.addEventListener('mousedown', (ev) => ev.preventDefault()); // a button here must not take the keyboard
+  b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    if (!window.confirm(t(k('panel.forceArchive.confirm'), { name: slug }))) return;
+    void api(`/api/agents/${slug}/force-archive`, { method: 'POST' }).catch(() => undefined);
+  });
+  return b;
+}
+
 export function syncArchiveButton(root: HTMLElement, state: Activity, ticket: SessionInfo['ticket']): void {
+  const can = canArchive(state, ticket?.status);
   const b = root.querySelector<HTMLElement>('.panel-archive');
-  if (b) b.hidden = !canArchive(state, ticket?.status);
+  if (b) b.hidden = !can;
+  const f = root.querySelector<HTMLElement>('.panel-force-archive');
+  if (f) f.hidden = can || f.dataset.role === 'main';
 }
 
 /** The open dialog's list and button, kept so a state push can refresh them without rebuilding the dialog. */
@@ -57,12 +79,12 @@ function paintRows(list: HTMLElement, archived: SessionInfo[]): void {
     else bindText(when, 'common.notAvailable');
     const restore = el('button');
     restore.type = 'button';
-    bindText(restore, k('archive.unarchive'));
+    setIconButton(restore, 'undo', k('archive.unarchive'));
     restore.addEventListener('click', () => { void unarchive(a.slug); });
     const remove = el('button');
     remove.type = 'button';
     remove.className = 'archive-delete';
-    bindText(remove, k('archive.delete'));
+    setIconButton(remove, 'trash', k('archive.delete'));
     remove.addEventListener('click', () => { void api(`/api/agents/${a.slug}`, { method: 'DELETE' }).catch(() => undefined); });
     row.append(name, profile, ticket, when, restore, remove);
     return row;
@@ -95,19 +117,16 @@ export function openArchiveDialog(getState: () => StateMessage | undefined): voi
   const all = el('button');
   all.type = 'button';
   all.className = 'archive-all';
-  bindText(all, k('archive.unarchiveAll'));
+  setIconButton(all, 'undo', k('archive.unarchiveAll'));
   all.addEventListener('click', () => {
     const slugs = archivedAgents(getState()?.agents ?? []).map((a) => a.slug);
     void Promise.all(slugs.map(unarchive));
   });
-  const close = el('button');
-  close.type = 'button';
-  bindText(close, 'common.close');
-  close.addEventListener('click', closeOverlay);
+  const close = closeDot(closeOverlay);
   const finished = el('button');
   finished.type = 'button';
   finished.className = 'archive-finished';
-  bindText(finished, k('archive.archiveFinished'));
+  setIconButton(finished, 'archive', k('archive.archiveFinished'));
   /** A confirmation popup over the dialog (a long list would push an inline question out of sight): the one that was open goes, Cancel closes this one, Yes runs `onYes`. */
   const ask = (kind: 'archive' | 'delete', count: number, textKey: string, yesKey: string, onYes: () => void): void => {
     overlay.querySelectorAll('.archive-confirm-backdrop').forEach((n) => n.remove());
@@ -120,12 +139,12 @@ export function openArchiveDialog(getState: () => StateMessage | undefined): voi
     const yes = el('button');
     yes.type = 'button';
     yes.className = 'archive-confirm-yes';
-    bindText(yes, yesKey);
+    setIconButton(yes, 'check', yesKey);
     yes.addEventListener('click', () => { backdrop.remove(); onYes(); });
     const no = el('button');
     no.type = 'button';
     no.className = 'archive-confirm-no';
-    bindText(no, 'common.cancel');
+    setIconButton(no, 'x', 'common.cancel');
     no.addEventListener('click', () => backdrop.remove());
     buttons.append(yes, no);
     line.append(text, buttons);
@@ -140,13 +159,13 @@ export function openArchiveDialog(getState: () => StateMessage | undefined): voi
   const deleteAll = el('button');
   deleteAll.type = 'button';
   deleteAll.className = 'archive-delete-all';
-  bindText(deleteAll, k('archive.deleteAll'));
+  setIconButton(deleteAll, 'trash', k('archive.deleteAll'));
   deleteAll.addEventListener('click', () => {
     ask('delete', archivedAgents(getState()?.agents ?? []).length, k('archive.confirmDeleteAll'), k('archive.confirmDeleteYes'),
       () => { void api('/api/agents/delete-archived', { method: 'POST' }).catch(() => undefined); });
   });
-  actions.append(finished, all, deleteAll, close);
-  dialog.append(title, list, actions);
+  actions.append(finished, all, deleteAll);
+  dialog.append(close, title, list, actions);
   overlay.replaceChildren(dialog);
   overlay.hidden = false;
   open = { list, all, deleteAll, finished, dialog };

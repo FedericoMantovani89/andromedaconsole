@@ -1,5 +1,6 @@
 import { bindText } from './i18n-client';
 import { openNewProjectDialog } from './new-project';
+import { setIconButton } from './icons';
 
 /**
  * The screen of a console with no project open (SPEC 5.1, 29.2): the project chrome is hidden and the new-project dialog asks for a project
@@ -24,7 +25,7 @@ export function showWelcome(o: { reload?: () => void } = {}): void {
   const choose = document.createElement('button');
   choose.type = 'button';
   choose.className = 'welcome-choose';
-  bindText(choose, 'welcome.choose');
+  setIconButton(choose, 'folder', 'welcome.choose');
   const ask = (): void => openNewProjectDialog(() => undefined, () => reload());
   choose.addEventListener('click', ask);
   welcome.replaceChildren(title, text, choose);

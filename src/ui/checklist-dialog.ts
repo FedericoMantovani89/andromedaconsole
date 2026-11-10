@@ -2,6 +2,7 @@ import { api } from './api';
 import { el, showDialog } from './dom';
 import { bindText } from './i18n-client';
 import { closeOverlay } from './settings';
+import { closeDot } from './close-dot';
 
 interface ChecklistStep { n: number; title: string; done: boolean; skipped?: boolean; note?: string; waitingOn?: { requestId: string; to: string } }
 
@@ -13,11 +14,7 @@ export function openChecklistDialog(slug: string): void {
   const empty = el('div');
   bindText(empty, 'common.notAvailable'); // until the answer arrives, and when it never does: "n/a", never an empty box
   const actions = el('div', 'form-actions');
-  const close = el('button');
-  bindText(close, 'common.close');
-  close.addEventListener('click', closeOverlay);
-  actions.append(close);
-  showDialog([title, empty, actions], 'checklist-dialog');
+  showDialog([closeDot(closeOverlay), title, empty], 'checklist-dialog');
 
   void api<{ steps?: ChecklistStep[] }>(`/api/agents/${slug}/checklist`).then((r) => {
     const steps = r.status === 200 ? r.body?.steps ?? [] : [];

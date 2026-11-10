@@ -98,7 +98,7 @@ describe('reviewerGoal', () => {
     expect(g).toMatch(/PASSED/);
     expect(g).toContain('D:/x/report.md');
     expect(g).toMatch(/read-only/i);
-    expect(g).toContain('mcp__console-mod__review_verdict');
+    expect(g).toContain('mcp__andromeda-mcp__review_verdict');
     expect(g).toMatch(/ToolSearch/);
   });
   it('a second round lists the previous notes to check', () => {

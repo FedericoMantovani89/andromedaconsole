@@ -138,8 +138,8 @@ describe('start', () => {
     expect(goal).toMatch(/turn 7: 900 tokens/);
     expect(goal).toContain('HANDOVER: step 3 half done');
     expect(goal).toContain('Add multiply to src/math.js');
-    expect(goal).toContain('mcp__console-mod__recovery_report');
-    expect(goal).toContain('select:mcp__console-mod__recovery_report');
+    expect(goal).toContain('mcp__andromeda-mcp__recovery_report');
+    expect(goal).toContain('select:mcp__andromeda-mcp__recovery_report');
     expect(goal).toMatch(/read-only/i);
   });
   it('a blocked ticket can be recovered too', async () => {

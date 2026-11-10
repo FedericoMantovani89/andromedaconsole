@@ -170,8 +170,8 @@ it('an agent without a worktree (git.worktrees off) cannot use the ticket tools 
   expect((await agentState(s)).state).toBe('starting');
 });
 it('the console tools an agent may use without a prompt are named by their full names', () => {
-  expect(AGENT_TOOLS).toEqual(expect.arrayContaining(['mcp__console-mod__step_done', 'mcp__console-mod__checklist_set', 'mcp__console-mod__report_blocked', 'mcp__console-mod__list_agents']));
-  expect(AGENT_TOOLS).not.toContain('mcp__console-mod__spawn_agent');
+  expect(AGENT_TOOLS).toEqual(expect.arrayContaining(['mcp__andromeda-mcp__step_done', 'mcp__andromeda-mcp__checklist_set', 'mcp__andromeda-mcp__report_blocked', 'mcp__andromeda-mcp__list_agents']));
+  expect(AGENT_TOOLS).not.toContain('mcp__andromeda-mcp__spawn_agent');
 });
 it('the state API needs the UI token, and progress is in the JSON the UI reads', async () => {
   const { s } = await boot();

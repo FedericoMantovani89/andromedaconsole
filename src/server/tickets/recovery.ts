@@ -172,7 +172,7 @@ export function recoveryGoal(i: { ticket: string; project: string; attempt: numb
     '2. Diagnose. From the facts above find why the work stopped: a loop, files read again and again, tests failing over and over, a step too big, an ambiguous objective.',
     '3. Remedy. Choose exactly one: split (the remaining work in smaller steps), exclude_paths (heavy files or folders to keep away from), change_model, remove_obstacle (a blocker to remove first, for example a flaky test), raise_budget (only when the work is right but bigger than the budget: the user decides the spend).',
     '',
-    'When you are done call mcp__console-mod__recovery_report (it is deferred: load it first with ToolSearch, query select:mcp__console-mod__recovery_report) with',
+    'When you are done call mcp__andromeda-mcp__recovery_report (it is deferred: load it first with ToolSearch, query select:mcp__andromeda-mcp__recovery_report) with',
     '{ verified_steps, diagnosis, remedy, notes }. verified_steps are the numbers of the closed steps you verified; diagnosis says why it stopped; notes say what the next agent must do or avoid (paths, model, obstacle).',
     'Call it exactly once, then stop. The console starts the next agent itself.',
   ];

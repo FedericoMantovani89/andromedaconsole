@@ -150,7 +150,7 @@ describe('options dialog', () => {
     expect(posts).toContain('POST /api/project/try');
     expect([...document.querySelectorAll<HTMLInputElement>('input[name="tryPath"]')].map((i) => i.value)).toEqual(tryList.map((c) => c.path));
     expect(document.querySelectorAll('button[name="tryCopy"]')).toHaveLength(2);
-    expect(document.querySelector('button[name="tryPrepare"]')!.getAttribute('data-i18n')).toBe('options.git.try.refresh');
+    expect(document.querySelector('button[name="tryPrepare"]')!.getAttribute('data-i18n-title')).toBe('options.git.try.refresh');
     document.querySelector<HTMLButtonElement>('button[name="tryRemove"]')!.click();
     await flush();
     expect(posts).toContain('DELETE /api/project/try');

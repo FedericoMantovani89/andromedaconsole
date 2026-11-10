@@ -15,7 +15,7 @@ import type { SessionInfo, StateMessage } from '../src/shared/protocol';
 const info = (slug: string, o: Partial<SessionInfo> = {}): SessionInfo => ({ slug, state: 'idle', status: 'exited', role: 'agent', profile: 'developer', ...o });
 const make = (agents: SessionInfo[]): StateMessage => ({ main: info('main', { role: 'main', status: 'running' }), agents } as unknown as StateMessage);
 const byKey = (root: HTMLElement, key: string): HTMLElement | undefined => [...root.querySelectorAll<HTMLElement>('[data-i18n]')].find((e) => e.dataset.i18n === key);
-const params = (el: Element) => JSON.parse((el as HTMLElement).dataset.i18nParams ?? '{}');
+const params = (el: Element) => JSON.parse((el as HTMLElement).dataset.i18nTitleParams ?? (el as HTMLElement).dataset.i18nParams ?? '{}'); // an icon button keeps its words in the tooltip
 
 const ended = '2026-10-10T08:30:00.000Z';
 const two = [
@@ -42,7 +42,7 @@ describe('status bar chip', () => {
     expect(chip.hidden).toBe(true);
     renderStatusBar(el, make([info('a'), ...two]));
     expect(chip.hidden).toBe(false);
-    expect(chip.dataset.i18n).toBe('statusbar.archived');
+    expect(chip.dataset.i18nTitle).toBe('statusbar.archived');
     expect(params(chip)).toEqual({ count: 2 });
     renderStatusBar(el, make([info('a')]));
     expect(chip.hidden).toBe(true);

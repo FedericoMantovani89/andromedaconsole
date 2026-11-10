@@ -127,7 +127,7 @@ it('at the reset the main gets exactly one wake-up message; a 10% reading afterw
   await until(async () => (await state(s)).sleep?.phase === 'probing');
   const wakes = await wakeMessages(s);
   expect(wakes).toHaveLength(1);
-  expect(wakes[0]!.text).toContain('mcp__console-mod__resume_agent');
+  expect(wakes[0]!.text).toContain('mcp__andromeda-mcp__resume_agent');
   expect(wakes[0]!.text).toContain('list_agents');
   expect((await state(s)).main.status).toBe('running'); // the main was alive: it is only told, never restarted
   expect(s.lastLaunchArgs('shop-api')).not.toContain('--resume');

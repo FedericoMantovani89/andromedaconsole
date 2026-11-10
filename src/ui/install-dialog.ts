@@ -4,6 +4,7 @@ import { el, checkbox } from './dom';
 import { bindText, k, t } from './i18n-client';
 import { errorText } from './new-agent';
 import { openInstallTerminal } from './install-terminal';
+import { setIconButton } from './icons';
 
 interface InstallInfo {
   id: string; action: 'install' | 'update'; display: string; source: { kind: string; origin: string };
@@ -38,7 +39,7 @@ export function openInstallDialog(id: string, onDone: () => void): void {
     const toolName = t('prereq.' + id);
     const actions = el('div', 'form-actions');
     const cancel = el('button');
-    bindText(cancel, 'common.cancel');
+    setIconButton(cancel, 'x', 'common.cancel');
     cancel.addEventListener('click', restore);
 
     const body = res.body as Described;
@@ -74,7 +75,7 @@ export function openInstallDialog(id: string, onDone: () => void): void {
         dialog.append(unverified);
       }
       const confirm = el('button');
-      bindText(confirm, 'prereq.install.confirm');
+      setIconButton(confirm, 'download', 'prereq.install.confirm');
       let script: HTMLInputElement | undefined;
       if (body.secondConfirm) {
         const scriptBox = checkbox(undefined, 'prereq.install.script');

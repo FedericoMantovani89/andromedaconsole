@@ -76,7 +76,7 @@ it('start_recovery: a read-only recovery on the WIP commit; its report restarts 
   expect((await agentOf(s, 'recover-fix-login')).budget).toBeUndefined(); // a recovery has no token budget
   expect(existsSync(ticketFile(t, 'recover-fix-login'))).toBe(false); // nor a ticket of its own
   const goal = (await inbox(s, 'recover-fix-login')).join('\n');
-  expect(goal).toContain('mcp__console-mod__recovery_report');
+  expect(goal).toContain('mcp__andromeda-mcp__recovery_report');
   expect(goal).toMatch(/budget/i);
   expect(goal).toMatch(/turn \d+: 1050 tokens/);
   // read-only, and only its own tools

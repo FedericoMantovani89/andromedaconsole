@@ -207,7 +207,7 @@ describe('QuotaService', () => {
     expect(h.svc.step()).toBe('halve');
     expect(h.applied.at(-1)).toBe('halve');
     expect(h.log).toContain('clear old'); // launches are allowed again: the limit restrictions go
-    expect(h.main.at(-1)).toContain('mcp__console-mod__resume_agent');
+    expect(h.main.at(-1)).toContain('mcp__andromeda-mcp__resume_agent');
   });
   it('a stop that comes down to freeze keeps the restrictions and still admits no launch', async () => {
     const h = harness();

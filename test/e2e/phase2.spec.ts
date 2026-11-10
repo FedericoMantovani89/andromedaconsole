@@ -128,7 +128,7 @@ try {
     await page.keyboard.press('Alt+Q');
     check('the permission shows the tool and exactly what it would do', await until(async () => (await page.locator('#drawer .queue-permission').innerText().catch(() => '')) === 'Permission for Bash'));
     check('the command is plain text, not HTML', (await page.locator('#drawer .queue-detail').innerText()) === 'echo hi > <b>out</b>.txt' && (await page.locator('#drawer .queue-detail b').count()) === 0);
-    check('only Allow, Deny and their "always" forms are offered', (await page.locator('#drawer .queue-options button').allInnerTexts()).join('|') === 'Allow|Deny|Always allow|Always deny' && (await page.locator('#drawer .queue-free').count()) === 0);
+    check('only Allow, Deny and their "always" forms are offered', (await page.locator('#drawer .queue-options button').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')))).join('|') === 'Allow|Deny|Always allow|Always deny' && (await page.locator('#drawer .queue-free').count()) === 0);
     const before = await owner(page);
     await page.click('#drawer .queue-options button[data-answer="allow"]');
     const answer = await polling;

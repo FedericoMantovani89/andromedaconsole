@@ -446,7 +446,7 @@ export function evaluate(call: GuardCall, baseCtx: GuardContext): GuardDecision 
       // The main does file-changing work through console agents (spawn_agent): a built-in subagent has no worktree, ticket or budget.
       const type = typeof call.input.subagent_type === 'string' ? call.input.subagent_type.toLowerCase() : '';
       if (call.role === 'main' && !READONLY_SUBAGENTS.has(type)) {
-        return deny('agent.builtin-subagent', 'built-in subagents are not visible to the console (no worktree, ticket or budget): start a console agent with mcp__console-mod__spawn_agent for this job (load it with ToolSearch). Only Explore/Plan look-ups are allowed here.');
+        return deny('agent.builtin-subagent', 'built-in subagents are not visible to the console (no worktree, ticket or budget): start a console agent with mcp__andromeda-mcp__spawn_agent for this job (load it with ToolSearch). Only Explore/Plan look-ups are allowed here.');
       }
       return ALLOW;
     }

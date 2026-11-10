@@ -8,6 +8,10 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+- Added a trash button on an agent's panel that closes a stuck agent and archives it by force (state finished, ticket untouched); it shows only where "Archive" is not offered.
+- Every button of the UI is now an icon with its words in the mouse-over, and every dialog, drawer and overlay closes with a red dot (the X shows on hover); the build fails on a new text-only button.
+- Renamed the console's MCP server from `console-mod` to `andromeda-mcp` (tools are now `mcp__andromeda-mcp__*`); sessions started before the update must be restarted.
+
 ## [0.0.17] - 2026-10-28
 
 ### Fixed

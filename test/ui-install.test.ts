@@ -74,7 +74,7 @@ describe('under the table', () => {
     expect(host.querySelector('button[name="restartConsole"]')).toBeNull();
     const middle = document.createElement('div');
     renderPrereqTable(host, results, middle, true);
-    expect(middle.querySelector('[data-i18n="prereq.recheck"]')).not.toBeNull();
+    expect(middle.querySelector('[data-i18n-title="prereq.recheck"]')).not.toBeNull();
     expect(host.querySelector('[data-i18n="prereq.afterInstall"]')).toBeNull();
   });
 });
@@ -125,7 +125,7 @@ describe('install dialog', () => {
   it('Run it posts the consent and opens the terminal it was given', async () => {
     describeBody = info();
     const overlay = await open();
-    const confirm = [...overlay.querySelectorAll('button')].find((b) => b.dataset.i18n === 'prereq.install.confirm')!;
+    const confirm = [...overlay.querySelectorAll('button')].find((b) => b.dataset.i18nTitle === 'prereq.install.confirm')!;
     confirm.click();
     await tick();
     expect(calls.find((c) => c.method === 'POST')).toMatchObject({ path: '/api/prereq/git/install', body: { confirmed: true } });
@@ -135,7 +135,7 @@ describe('install dialog', () => {
   it('a script waits for its second confirmation before the button works', async () => {
     describeBody = info({ secondConfirm: true, source: { kind: 'script', origin: 'https://example.invalid/i.ps1' } });
     const overlay = await open();
-    const confirm = [...overlay.querySelectorAll('button')].find((b) => b.dataset.i18n === 'prereq.install.confirm')!;
+    const confirm = [...overlay.querySelectorAll('button')].find((b) => b.dataset.i18nTitle === 'prereq.install.confirm')!;
     const box = overlay.querySelector<HTMLInputElement>('input[type=checkbox]')!;
     expect(confirm.disabled).toBe(true);
     box.checked = true;
@@ -163,7 +163,7 @@ describe('install dialog', () => {
     overlay.append(before);
     await open();
     expect(overlay.querySelector('#before')).toBeNull();
-    [...overlay.querySelectorAll('button')].find((b) => b.dataset.i18n === 'common.cancel')!.click();
+    [...overlay.querySelectorAll('button')].find((b) => b.dataset.i18nTitle === 'common.cancel')!.click();
     await tick();
     expect(overlay.querySelector('#before')).not.toBeNull();
     expect(calls.filter((c) => c.method === 'POST' && c.path.endsWith('/install'))).toEqual([]);

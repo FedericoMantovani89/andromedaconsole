@@ -264,7 +264,7 @@ it('ask_user waits through repeated polls and returns the human answer', async (
     return { ok: true, text: '{}' };
   } });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__ask_user')(f.$, { question: 'Color?', options: ['Red', 'Blue'] });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__ask_user')(f.$, { question: 'Color?', options: ['Red', 'Blue'] });
   expect(out).toEqual({ result: 'The user answered: Red' });
   expect(polls).toBe(3);
 });
@@ -276,7 +276,7 @@ it('ask_user gives up with a clear message when the console stops answering, ins
     return new Error('down');
   } });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__ask_user')(f.$, { question: 'Color?' });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__ask_user')(f.$, { question: 'Color?' });
   expect(created).toBe(true);
   expect(out.result).toMatch(/No answer/);
 });
@@ -372,7 +372,7 @@ it('leaves alone: an engine "allow" or "deny", the main session, queries without
   expect((await find('tool.check')(agent.$, bashCheck, async () => ({ decision: 'deny', reason: 'rule' }))).decision).toBe('deny');
   expect((await find('tool.check')(agent.$, { tool: 'Bash', input: {} }, asking)).decision).toBe('ask');
   expect((await find('tool.check')(agent.$, { tool: 'AskUserQuestion', input: {}, tool_use_id: 'x' }, asking)).decision).toBe('ask');
-  expect((await find('tool.check')(agent.$, { tool: 'mcp__console-mod__list_agents', input: {}, tool_use_id: 'x' }, asking)).decision).toBe('ask');
+  expect((await find('tool.check')(agent.$, { tool: 'mcp__andromeda-mcp__list_agents', input: {}, tool_use_id: 'x' }, asking)).decision).toBe('ask');
   expect(agent.calls.length).toBe(before);
   const { find: findMain } = await loadMod();
   const main = fake$({ env: { CONSOLE_ROLE: 'main' }, fetch: permissionFetch('allow') });
@@ -397,12 +397,12 @@ it('step_done, checklist_set and report_blocked send only their own fields and r
     },
   });
   await find('session.start')(f.$, {}, next);
-  const done = await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: '3', note: 'x', skip: false, extra: 'ignored' });
+  const done = await find('tool.call', 'mcp__andromeda-mcp__step_done')(f.$, { n: '3', note: 'x', skip: false, extra: 'ignored' });
   expect(done).toEqual({ result: JSON.stringify({ status: 'closed', n: 3 }) });
   expect(bodies.step_done).toEqual({ n: 3, note: 'x', skip: false });
-  await find('tool.call', 'mcp__console-mod__checklist_set')(f.$, { items: ['a', 'b'], extra: 1 });
+  await find('tool.call', 'mcp__andromeda-mcp__checklist_set')(f.$, { items: ['a', 'b'], extra: 1 });
   expect(bodies.checklist_set).toEqual({ items: ['a', 'b'] });
-  await find('tool.call', 'mcp__console-mod__report_blocked')(f.$, { reason: 'stuck', extra: 1 });
+  await find('tool.call', 'mcp__andromeda-mcp__report_blocked')(f.$, { reason: 'stuck', extra: 1 });
   expect(bodies.report_blocked).toEqual({ reason: 'stuck' });
 });
 it('step_done forwards the tests the agent ran, and only the fields the console knows', async () => {
@@ -416,9 +416,9 @@ it('step_done forwards the tests the agent ran, and only the fields the console 
     },
   });
   await find('session.start')(f.$, {}, next);
-  await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 4, tests: { command: 'npm test', result: 'passed', summary: '358 ok', extra: 1 } });
+  await find('tool.call', 'mcp__andromeda-mcp__step_done')(f.$, { n: 4, tests: { command: 'npm test', result: 'passed', summary: '358 ok', extra: 1 } });
   expect(bodies.step_done).toEqual({ n: 4, tests: { command: 'npm test', result: 'passed', summary: '358 ok' } });
-  await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 4, tests: 'passed' });
+  await find('tool.call', 'mcp__andromeda-mcp__step_done')(f.$, { n: 4, tests: 'passed' });
   expect(bodies.step_done).toEqual({ n: 4, tests: 'passed' });
 });
 it('step_done keeps asking while the console says "running" and returns the final answer', async () => {
@@ -433,7 +433,7 @@ it('step_done keeps asking while the console says "running" and returns the fina
     },
   });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 5 });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__step_done')(f.$, { n: 5 });
   expect(out).toEqual({ result: JSON.stringify({ status: 'closed', n: 5 }) });
   expect(n).toBe(4);
 });
@@ -450,16 +450,16 @@ it('step_done survives a dropped connection while the validation runs and asks a
     },
   });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 5 });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__step_done')(f.$, { n: 5 });
   expect(out).toEqual({ result: JSON.stringify({ status: 'closed', n: 5 }) });
 });
 it('a ticket tool called while the console is unreachable says so instead of throwing', async () => {
   const { find } = await loadMod();
   const f = fake$({ env: { CONSOLE_ROLE: 'agent', CONSOLE_AGENT: 'fix-login' }, fetch: (url) => (url.includes('/v1/tools/') ? new Error('ECONNREFUSED') : { ok: true, text: '{}' }) });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__checklist_set')(f.$, { items: ['a'] });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__checklist_set')(f.$, { items: ['a'] });
   expect(out).toEqual({ result: 'The console did not answer.' });
-  const done = await find('tool.call', 'mcp__console-mod__step_done')(f.$, { n: 1 });
+  const done = await find('tool.call', 'mcp__andromeda-mcp__step_done')(f.$, { n: 1 });
   expect(done.result).toContain('call step_done again with the same n');
 });
 it('merge_ticket keeps asking while the console says "running" and returns the final answer', async () => {
@@ -474,7 +474,7 @@ it('merge_ticket keeps asking while the console says "running" and returns the f
     },
   });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__merge_ticket')(f.$, { name: 'fix-login' });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__merge_ticket')(f.$, { name: 'fix-login' });
   expect(out).toEqual({ result: JSON.stringify({ status: 'merged', sha: 'abc' }) });
   expect(n).toBe(4);
 });
@@ -514,17 +514,17 @@ it('spawn_agent forwards after and after_reason, and a refusal reaches the main 
     },
   });
   await find('session.start')(f.$, {}, next);
-  const spawned = await find('tool.call', 'mcp__console-mod__spawn_agent')(f.$, { name: 'orders-api', profile: 'developer', goal: 'g', after: 'orders-schema', after_reason: 'needs the migration files', extra: 1 });
+  const spawned = await find('tool.call', 'mcp__andromeda-mcp__spawn_agent')(f.$, { name: 'orders-api', profile: 'developer', goal: 'g', after: 'orders-schema', after_reason: 'needs the migration files', extra: 1 });
   expect(bodies.spawn_agent).toEqual({ name: 'orders-api', profile: 'developer', goal: 'g', after: 'orders-schema', after_reason: 'needs the migration files' });
   expect(JSON.parse(spawned.result)).toEqual(answers.spawn_agent);
-  const merged = await find('tool.call', 'mcp__console-mod__merge_ticket')(f.$, { name: 'orders-api' });
+  const merged = await find('tool.call', 'mcp__andromeda-mcp__merge_ticket')(f.$, { name: 'orders-api' });
   expect(JSON.parse(merged.result)).toEqual(answers.merge_ticket);
 });
 it('merge_ticket with the console unreachable says the merge may still be running and to call it again', async () => {
   const { find } = await loadMod();
   const f = fake$({ fetch: (url) => (url.includes('/v1/tools/') ? new Error('ECONNREFUSED') : { ok: true, text: '{}' }) });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__merge_ticket')(f.$, { name: 'fix-login' });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__merge_ticket')(f.$, { name: 'fix-login' });
   expect(out.result).toBe('The console did not answer. The merge may still be running: call merge_ticket again.');
 });
 
@@ -544,7 +544,7 @@ it('every guarded tool has a hook, and the console\'s own tools are not guarded'
   const f = fake$({ env: { CONSOLE_ROLE: 'agent', CONSOLE_AGENT: 'fix-login' }, fetch: guardFetch({ decision: 'deny', reason: 'no' }) });
   await find('session.start')(f.$, {}, next);
   f.calls.length = 0;
-  await find('tool.call', 'mcp__console-mod__list_agents')(f.$, {});
+  await find('tool.call', 'mcp__andromeda-mcp__list_agents')(f.$, {});
   expect(f.calls.some((c) => c.endsWith('/v1/guard'))).toBe(false);
 });
 it('a deny from the console becomes { deny: reason }; an allow passes the call on', async () => {
@@ -647,14 +647,14 @@ it('the review tools send only their own fields', async () => {
   const bodies: Record<string, unknown> = {};
   const f = fake$({ fetch: (url, init) => { if (url.includes('/v1/tools/')) { bodies[url.split('/').pop()!] = JSON.parse(init.body ?? '{}'); return { ok: true, text: '{"status":"ok"}' }; } return { ok: true, text: '{}' }; } });
   await find('session.start')(f.$, {}, next);
-  await find('tool.call', 'mcp__console-mod__ticket_report')(f.$, { name: 'fix-login', rerun: true, extra: 1 });
-  await find('tool.call', 'mcp__console-mod__request_review')(f.$, { name: 'fix-login', model: 'sonnet', extra: 1 });
-  await find('tool.call', 'mcp__console-mod__merge_ticket')(f.$, { name: 'fix-login', extra: 1 });
-  await find('tool.call', 'mcp__console-mod__propose_release')(f.$, {});
+  await find('tool.call', 'mcp__andromeda-mcp__ticket_report')(f.$, { name: 'fix-login', rerun: true, extra: 1 });
+  await find('tool.call', 'mcp__andromeda-mcp__request_review')(f.$, { name: 'fix-login', model: 'sonnet', extra: 1 });
+  await find('tool.call', 'mcp__andromeda-mcp__merge_ticket')(f.$, { name: 'fix-login', extra: 1 });
+  await find('tool.call', 'mcp__andromeda-mcp__propose_release')(f.$, {});
   expect(bodies).toEqual({ ticket_report: { name: 'fix-login', rerun: true }, request_review: { name: 'fix-login', model: 'sonnet' }, merge_ticket: { name: 'fix-login' }, propose_release: {} });
   const g = fake$({ env: { CONSOLE_ROLE: 'reviewer', CONSOLE_AGENT: 'review-x' }, fetch: (url, init) => { if (url.endsWith('/review_verdict')) bodies.verdict = JSON.parse(init.body ?? '{}'); return { ok: true, text: '{"status":"ok"}' }; } });
   await find('session.start')(g.$, {}, next);
-  await find('tool.call', 'mcp__console-mod__review_verdict')(g.$, { pass: false, notes: [{ severity: 'high', text: 'bug' }], extra: 1 });
+  await find('tool.call', 'mcp__andromeda-mcp__review_verdict')(g.$, { pass: false, notes: [{ severity: 'high', text: 'bug' }], extra: 1 });
   expect(bodies.verdict).toEqual({ pass: false, notes: [{ severity: 'high', text: 'bug' }] });
 });
 it('a reviewer\'s permission prompts and native questions go to the console queue like an agent\'s', async () => {
@@ -728,10 +728,10 @@ it('the recovery tools send only their own fields', async () => {
   const fetch = (url: string, init: { body?: string }) => { if (url.includes('/v1/tools/')) bodies[url.split('/').pop()!] = JSON.parse(init.body ?? '{}'); return { ok: true, text: '{"status":"ok"}' }; };
   const m = fake$({ fetch });
   await find('session.start')(m.$, {}, next);
-  await find('tool.call', 'mcp__console-mod__start_recovery')(m.$, { name: 'fix-login', extra: 1 });
+  await find('tool.call', 'mcp__andromeda-mcp__start_recovery')(m.$, { name: 'fix-login', extra: 1 });
   const r = fake$({ env: { CONSOLE_ROLE: 'recovery', CONSOLE_AGENT: 'recover-fix-login' }, fetch });
   await find('session.start')(r.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__recovery_report')(r.$, { verified_steps: [1, 2], diagnosis: 'loop on dist/', remedy: 'exclude_paths', notes: 'skip dist/', extra: 1 });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__recovery_report')(r.$, { verified_steps: [1, 2], diagnosis: 'loop on dist/', remedy: 'exclude_paths', notes: 'skip dist/', extra: 1 });
   expect(out).toEqual({ result: '{"status":"ok"}' });
   expect(bodies).toEqual({
     start_recovery: { name: 'fix-login' },
@@ -776,7 +776,7 @@ it('resume_agent forwards only { names } and returns the console answer as text'
     return { ok: true, text: '{}' };
   } });
   await find('session.start')(f.$, {}, next);
-  const out = await find('tool.call', 'mcp__console-mod__resume_agent')(f.$, { names: ['fix-login', 'add-cart'], extra: 1 });
+  const out = await find('tool.call', 'mcp__andromeda-mcp__resume_agent')(f.$, { names: ['fix-login', 'add-cart'], extra: 1 });
   expect(out).toEqual({ result: JSON.stringify(answer) });
   expect(bodies).toEqual({ resume_agent: { names: ['fix-login', 'add-cart'] } });
 });

@@ -54,7 +54,7 @@ export class StaleChecker {
         }
       }
       if (fresh.length > 0) {
-        this.d.tellMain(`These agent worktrees have not been touched for more than ${this.d.days()} days: ${fresh.map((f) => `${f.slug} (${f.days} days)`).join(', ')}. Ask the user what to do with each one. To free the disk space of one, call worktree_cleanup {name, action: "remove"} (deferred: load it first with ToolSearch, query select:mcp__console-mod__worktree_cleanup): the console saves the work, pushes the branch and only then removes the folder; the branch and the ticket stay.`);
+        this.d.tellMain(`These agent worktrees have not been touched for more than ${this.d.days()} days: ${fresh.map((f) => `${f.slug} (${f.days} days)`).join(', ')}. Ask the user what to do with each one. To free the disk space of one, call worktree_cleanup {name, action: "remove"} (deferred: load it first with ToolSearch, query select:mcp__andromeda-mcp__worktree_cleanup): the console saves the work, pushes the branch and only then removes the folder; the branch and the ticket stay.`);
         this.d.changed();
       }
     } catch { /* a check that fails is tried again at the next one */ } finally {

@@ -3,6 +3,7 @@ import { api } from './api';
 import { bindText, t } from './i18n-client';
 import { focusElementFromUser } from './focus';
 import { el } from './dom';
+import { setIconButton } from './icons';
 
 /** Translates a server error code (SPEC 5.9: the server sends codes and parameters, never sentences). */
 export function errorText(err: ApiError): string {
@@ -18,7 +19,7 @@ export function createNewAgentControl(getProfiles: () => readonly string[], afte
   const wrap = el('div', 'new-agent-wrap');
   const button = el('button');
   button.id = 'new-agent-btn';
-  bindText(button, 'panel.newAgent');
+  setIconButton(button, 'plus', 'panel.newAgent');
   wrap.append(button);
 
   button.addEventListener('click', () => {
@@ -66,10 +67,10 @@ export function createNewAgentControl(getProfiles: () => readonly string[], afte
     const actions = el('div', 'form-actions');
     const create = el('button');
     create.type = 'submit';
-    bindText(create, 'common.create');
+    setIconButton(create, 'check', 'common.create');
     const cancel = el('button');
     cancel.type = 'button';
-    bindText(cancel, 'common.cancel');
+    setIconButton(cancel, 'x', 'common.cancel');
     actions.append(create, cancel);
     form.append(slugLabel, profileLabel, repoLabel, error, actions);
 

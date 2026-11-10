@@ -101,7 +101,7 @@ describe('LoopService steps', () => {
     expect(r.calls).toContain('stop');
     expect(r.calls).not.toContain('recovery'); // started by the main, never automatically
     const last = r.mains[r.mains.length - 1]!;
-    expect(last).toContain('mcp__console-mod__start_recovery');
+    expect(last).toContain('mcp__andromeda-mcp__start_recovery');
     expect(last).toContain('name a');
   });
 

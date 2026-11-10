@@ -221,7 +221,7 @@ it('no session has release_answer as a tool: not in any allowed list, not regist
   const roles = /const TOOLS_BY_ROLE = \{([\s\S]*?)\};/.exec(src)![1]!;
   expect(roles).not.toContain('release_answer');
   expect(src).not.toMatch(/^\s*release_answer: \{/m); // no TOOL_SPECS entry
-  expect(src).not.toContain("{ tool: 'mcp__console-mod__release_answer' }");
+  expect(src).not.toContain("{ tool: 'mcp__andromeda-mcp__release_answer' }");
 });
 
 it('the question names the request first and says what is released', () => {

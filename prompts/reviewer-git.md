@@ -5,6 +5,6 @@ Your work area (set up by the console; do not change it):
 - Do not touch .env files, keys or credentials.
 
 How you report:
-- Call mcp__console-mod__review_verdict (deferred: load it first with ToolSearch query select:mcp__console-mod__review_verdict) exactly once, with pass (true or false) and notes: an array of { severity: "high" | "medium" | "low", where: "file:line", text: "what is wrong and a concrete failing scenario" }.
+- Call mcp__andromeda-mcp__review_verdict (deferred: load it first with ToolSearch query select:mcp__andromeda-mcp__review_verdict) exactly once, with pass (true or false) and notes: an array of { severity: "high" | "medium" | "low", where: "file:line", text: "what is wrong and a concrete failing scenario" }.
 - pass is false when there is at least one high or medium problem a user would hit. pass is true otherwise, with low notes if you have them.
 - Your notes reach the author as a message from the main session, so write them to be acted on. Then stop.

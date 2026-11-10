@@ -8,7 +8,7 @@ import { reconcile } from './dom';
 import { errorText } from './new-agent';
 import { bindText, k } from './i18n-client';
 import { setIconButton } from './icons';
-import { createArchiveButton, syncArchiveButton } from './archive';
+import { createArchiveButton, createForceArchiveButton, syncArchiveButton } from './archive';
 import { openChecklistDialog } from './checklist-dialog';
 import { createCompactButton, createDormantPanel } from './dormant-panel';
 import { STATE_KEYS, applyBudget, applyLoop, applyProgress, applyRequests, applyTicket, applyWaiting } from './chips';
@@ -125,7 +125,7 @@ function createPanel(info: SessionInfo, onActivate: (slug: string) => void, proj
     micBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('console-open-dictation')));
     header.append(micBtn);
   }
-  header.append(readBtn, createArchiveButton(info.slug));
+  header.append(readBtn, createArchiveButton(info.slug), createForceArchiveButton(info.slug, info.role));
   if (onCompact) header.append(createCompactButton(info.slug, onCompact));
 
   const host = document.createElement('div');
@@ -378,7 +378,7 @@ export class Workspace {
     applyRequests(requestsWaiting, requestsOwed, info.requests);
     const stale = document.createElement('span');
     applyStale(stale, info.stale);
-    el.append(nameBlock(title, meta), state, stalled, ticket, budget, loop, waiting, requestsWaiting, requestsOwed, stale, progress, createArchiveButton(info.slug));
+    el.append(nameBlock(title, meta), state, stalled, ticket, budget, loop, waiting, requestsWaiting, requestsOwed, stale, progress, createArchiveButton(info.slug), createForceArchiveButton(info.slug, info.role));
     syncArchiveButton(el, info.state, info.ticket);
     if (dormant) this.dormantControls(el, info.slug);
     if (!pending) { // a queued agent has no terminal to expand yet
@@ -407,7 +407,7 @@ export class Workspace {
     }).catch(() => undefined);
     const wake = document.createElement('button');
     wake.className = 'panel-wake';
-    bindText(wake, 'panel.wake');
+    setIconButton(wake, 'play', 'panel.wake');
     const error = document.createElement('span');
     error.className = 'form-error';
     const doWake = (): void => {

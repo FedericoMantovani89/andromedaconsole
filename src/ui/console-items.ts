@@ -3,6 +3,7 @@ import { bindText, k } from './i18n-client';
 import { renderInto } from './markdown-lazy';
 import { formatWhen } from './statusbar';
 import { keepFocus } from './dom';
+import { setIconButton, type IconName } from './icons';
 
 /** Items the console itself puts in the queue (not an agent's question): a release to approve, a ticket that needs the user. */
 export interface Entry { el: HTMLElement }
@@ -12,11 +13,15 @@ const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
 
-/** An answer button of a queue entry: sends `value`, never takes the keyboard. */
+const ANSWER_ICONS: Record<string, IconName> = {
+  approve: 'check', ok: 'check', allow: 'check', allow_always: 'checkDouble', reject: 'x', decline: 'x', deny: 'x', deny_always: 'ban', send_back: 'undo', leave: 'minus', follow_up: 'send', restart: 'refresh', raise: 'plus', close: 'archive', recover: 'refresh',
+};
+
+/** An answer button of a queue entry: an icon for the answer, its words in the tooltip; sends `value`, never takes the keyboard. */
 export function answerButton(key: string, value: string, send: (answer: string) => void): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
-  bindText(b, key);
+  setIconButton(b, ANSWER_ICONS[value] ?? 'send', key);
   b.dataset.answer = value;
   b.addEventListener('click', () => send(value));
   keepFocus(b);

@@ -34,7 +34,7 @@ describe('the Browse button of the new-project dialog', () => {
   it('fills the folder with what the native window returned and checks it', async () => {
     openNewProjectDialog(() => undefined);
     await tick();
-    expect(browse().dataset.i18n).toBe('projects.new.browse');
+    expect(browse().dataset.i18nTitle).toBe('projects.new.browse');
     browse().click();
     await tick(); await tick();
     expect(calls.some((c) => c.path === '/api/pick-folder' && c.method === 'POST')).toBe(true);

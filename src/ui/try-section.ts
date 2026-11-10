@@ -3,6 +3,7 @@ import { api } from './api';
 import { bindText, k } from './i18n-client';
 import { infoIcon } from './info-icon';
 import { el } from './dom';
+import { setIconButton } from './icons';
 
 type TryCheckout = NonNullable<StateMessage['project']['tryCheckouts']>[number];
 
@@ -27,7 +28,7 @@ export function renderTryCheckouts(state: StateMessage | undefined, getState: ()
   let remove: HTMLButtonElement | undefined;
 
   const render = (checkouts: readonly TryCheckout[]): void => {
-    bindText(prepare, checkouts.length > 0 ? k('options.git.try.refresh') : k('options.git.try.prepare'));
+    setIconButton(prepare, checkouts.length > 0 ? 'refresh' : 'play', checkouts.length > 0 ? k('options.git.try.refresh') : k('options.git.try.prepare'));
     list.replaceChildren(...checkouts.map((c) => {
       const row = el('div', 'options-git-try-row');
       const label = el('span', 'settings-note');
@@ -41,7 +42,7 @@ export function renderTryCheckouts(state: StateMessage | undefined, getState: ()
       const copy = el('button');
       copy.type = 'button';
       copy.name = 'tryCopy';
-      bindText(copy, k('options.git.try.copy'));
+      setIconButton(copy, 'copy', k('options.git.try.copy'));
       copy.addEventListener('click', () => {
         try { void navigator.clipboard.writeText(c.path).catch(() => path.select()); } catch { path.select(); }
       });
@@ -55,7 +56,7 @@ export function renderTryCheckouts(state: StateMessage | undefined, getState: ()
       remove = el('button');
       remove.type = 'button';
       remove.name = 'tryRemove';
-      bindText(remove, k('options.git.try.remove'));
+      setIconButton(remove, 'trash', k('options.git.try.remove'));
       remove.addEventListener('click', onRemove);
       actions.append(remove);
     } else if (checkouts.length === 0 && remove) {

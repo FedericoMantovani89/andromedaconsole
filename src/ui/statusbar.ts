@@ -3,6 +3,7 @@ import { runningAgents } from '../shared/stats';
 import { api } from './api';
 import { openArchiveDialog, refreshArchiveDialog, archivedAgents, archivableAgents, visibleAgents } from './archive';
 import { bindText, k, setTitle, t } from './i18n-client';
+import { setIconButton, setQueueBadge } from './icons';
 
 interface Bar {
   /** Shown while agents run without permission prompts (bypass). */
@@ -66,7 +67,7 @@ function build(el: HTMLElement): Bar {
   resume.className = 'statusbar-resume';
   resume.hidden = true;
   resume.disabled = true;
-  bindText(resume, 'statusbar.resumeNow');
+  setIconButton(resume, 'play', 'statusbar.resumeNow');
   resume.addEventListener('mousedown', (ev) => ev.preventDefault());
   resume.addEventListener('click', () => { void api('/api/sleep/resume', { method: 'POST' }).catch(() => undefined); });
   const agents = span();
@@ -120,8 +121,8 @@ function paintUpdate(bar: Bar, u: StateMessage['update']): void {
   if (u.phase === 'available') bindText(bar.update, 'statusbar.update.available', { version: u.version });
   else if (u.phase === 'downloading') bindText(bar.update, 'statusbar.update.downloading', { version: u.version, percent: u.percent ?? 0 });
   else bindText(bar.update, 'statusbar.update.ready', { version: u.version });
-  if (bar.updateAction === 'download') bindText(bar.updateBtn, 'statusbar.update.download');
-  else if (bar.updateAction === 'install') bindText(bar.updateBtn, 'statusbar.update.install');
+  if (bar.updateAction === 'download') setIconButton(bar.updateBtn, 'download', 'statusbar.update.download');
+  else if (bar.updateAction === 'install') setIconButton(bar.updateBtn, 'refresh', 'statusbar.update.install');
 }
 
 function paintSleep(bar: Bar): void {
@@ -151,7 +152,7 @@ export function renderStatusBar(el: HTMLElement, state: StateMessage): void {
   bar.bypass.hidden = !state.settings?.bypassPermissions;
   const newest = state.stateProblems?.[state.stateProblems.length - 1];
   bar.problem.hidden = newest === undefined;
-  if (newest) bindText(bar.problem, 'statusbar.stateProblem', { file: newest.file, movedTo: newest.movedTo });
+  if (newest) setIconButton(bar.problem, 'warning', 'statusbar.stateProblem', { file: newest.file, movedTo: newest.movedTo });
   // The quota percent is absent when unknown: n/a, never zero.
   bar.quota.replaceChildren();
   if (state.quota && Number.isFinite(state.quota.percent)) {
@@ -176,6 +177,6 @@ export function renderStatusBar(el: HTMLElement, state: StateMessage): void {
   const archived = archivedAgents(state.agents).length;
   // Reachable also at zero while something can be archived: the list holds the "Archive all finished" button.
   bar.archived.hidden = archived === 0 && archivableAgents(state.agents).length === 0;
-  if (!bar.archived.hidden) bindText(bar.archived, 'statusbar.archived', { count: archived });
+  if (!bar.archived.hidden) { setIconButton(bar.archived, 'archive', 'statusbar.archived', { count: archived }); setQueueBadge(bar.archived, archived); }
   refreshArchiveDialog(state);
 }

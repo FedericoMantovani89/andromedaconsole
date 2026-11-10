@@ -5,6 +5,7 @@ import { createDrawerShell } from './drawer';
 import { bindText, k, setPlaceholder } from './i18n-client';
 import { infoIcon } from './info-icon';
 import { answerButton, createBudgetEntry, createConfirmEntry, createDecisionEntry, createWeeklyEntry, type Entry } from './console-items';
+import { setIconButton } from './icons';
 
 /** The console's own decision kinds that have an entry of their own (`payload.kind`). */
 function payloadKind(item: QueueItem): unknown {
@@ -94,7 +95,7 @@ function createEntry(item: QueueItem, send: (answer: string) => void): Entry {
   answerRow.className = 'queue-answer';
   const submit = document.createElement('button');
   submit.type = 'button';
-  bindText(submit, 'queue.send');
+  setIconButton(submit, 'send', 'queue.send');
   const collect = () => {
     const picked = checks.filter((c) => c.checked).map((c) => c.value);
     const typed = free.value.trim();

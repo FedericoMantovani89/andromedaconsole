@@ -67,7 +67,7 @@ export function renderSecretsTab(container: HTMLElement, stage: Stage): void {
       clearBtn.addEventListener('click', () => { clearing = !clearing; if (clearing) input.value = ''; paint(); });
       row.append(clearBtn);
     }
-    if (clearBtn) bindText(clearBtn, clearing ? k('options.secrets.undoClear') : k('options.secrets.clear'));
+    if (clearBtn) setIconButton(clearBtn, clearing ? 'undo' : 'trash', clearing ? k('options.secrets.undoClear') : k('options.secrets.clear'));
   };
   input.addEventListener('input', () => { if (input.value !== '') clearing = false; paint(); });
   paint();

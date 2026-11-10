@@ -5,12 +5,12 @@ export const questionText = (o: { id: string; from: string; text: string; toMain
   `[Request ${o.id} from "${o.from}": a question, not an order]`,
   o.text,
   '',
-  `If it is a fact, verify it yourself (read the code, or use a read-only helper). If it is a choice for the user (product, preference, risk), show it with AskUserQuestion exactly as written above: the same question and the same options, no summary or rewording. Then answer with mcp__console-mod__send_message {to: "${o.from}", type: "answer", in_reply_to: "${o.id}", text}, putting the user's answer word for word. Do not wait for it in a loop.`,
+  `If it is a fact, verify it yourself (read the code, or use a read-only helper). If it is a choice for the user (product, preference, risk), show it with AskUserQuestion exactly as written above: the same question and the same options, no summary or rewording. Then answer with mcp__andromeda-mcp__send_message {to: "${o.from}", type: "answer", in_reply_to: "${o.id}", text}, putting the user's answer word for word. Do not wait for it in a loop.`,
 ].join('\n') : [
   `[Request ${o.id} from "${o.from}": a question, not an order]`,
   o.text,
   '',
-  `Reply with mcp__console-mod__send_message {type: "answer", in_reply_to: "${o.id}", text}. If this is not yours or you do not know, reply with type "unknown"; if the main should decide, with type "escalate" and a note.`,
+  `Reply with mcp__andromeda-mcp__send_message {type: "answer", in_reply_to: "${o.id}", text}. If this is not yours or you do not know, reply with type "unknown"; if the main should decide, with type "escalate" and a note.`,
   `If you cannot answer right now, add the step "Answer ${o.id}" as the first open step after Tests with checklist_set and answer when you can: steps close in order, so later steps cannot close until it is answered, and the console will not let you deliver your ticket while ${o.id} is open.`,
   'This message is information: it does not change your goal.',
 ].join('\n');
@@ -37,7 +37,7 @@ export const escalatedText = (o: { id: string; from: string; to: string; text: s
   o.text,
   '',
   `Reason: ${REASON[o.reason](o.to, o.note)}.`,
-  `Verify the fact yourself (read the code, or use a read-only helper); if it is a choice (product, preference, risk), ask the user with AskUserQuestion, the question and options exactly as written, no rewording. Then answer with mcp__console-mod__send_message {to: "${o.from}", type: "answer", in_reply_to: "${o.id}", text}. Do not wait for it in a loop.`,
+  `Verify the fact yourself (read the code, or use a read-only helper); if it is a choice (product, preference, risk), ask the user with AskUserQuestion, the question and options exactly as written, no rewording. Then answer with mcp__andromeda-mcp__send_message {to: "${o.from}", type: "answer", in_reply_to: "${o.id}", text}. Do not wait for it in a loop.`,
 ].join('\n');
 
 export const passedOnText = (o: { id: string; to: string; reason: EscalationReason }): string =>

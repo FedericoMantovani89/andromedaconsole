@@ -6,17 +6,18 @@ import { errorText } from './new-agent';
 import { loadModelSelect } from './model-select';
 import { createSlider, groupNumber, infoIcon } from './options';
 import { el, note } from './dom';
+import { setIconButton, type IconName } from './icons';
 
 /** What `GET /api/profiles` returns for one profile (the user's layer, plus where the version in force comes from). */
 interface ProfileRow extends Profile {
   shipped: boolean; userFile: boolean; projectOverrides: boolean;
 }
 
-const button = (name: string, key: string): HTMLButtonElement => {
+const button = (name: string, key: string, icon: IconName): HTMLButtonElement => {
   const b = el('button');
   b.type = 'button';
   b.name = name;
-  bindText(b, key);
+  setIconButton(b, icon, key);
   return b;
 };
 
@@ -43,7 +44,7 @@ export function renderProfilesTab(box: HTMLElement, folder: string, defaultBudge
     body.replaceChildren();
     if (box.parentElement) box.parentElement.scrollTop = 0;
     const top = el('div', 'options-profiles-top options-profile-bar');
-    const add = button('newProfile', k('options.profiles.new'));
+    const add = button('newProfile', k('options.profiles.new'), 'plus');
     add.addEventListener('click', () => showForm(undefined));
     top.append(add);
     body.append(top);
@@ -60,13 +61,13 @@ export function renderProfilesTab(box: HTMLElement, folder: string, defaultBudge
       const actions = el('div', 'options-profile-actions');
       const editable = p.source !== 'project' || p.userFile || p.shipped; // a profile only the project has is not the user's to edit
       if (editable) {
-        const edit = button('editProfile', k('options.profiles.edit'));
+        const edit = button('editProfile', k('options.profiles.edit'), 'edit');
         edit.dataset.profile = p.name;
         edit.addEventListener('click', () => showForm(p));
         actions.append(edit);
       }
       if (p.userFile) {
-        const drop = button(p.shipped ? 'restoreProfile' : 'deleteProfile', p.shipped ? k('options.profiles.restoreOne') : k('options.profiles.delete'));
+        const drop = button(p.shipped ? 'restoreProfile' : 'deleteProfile', p.shipped ? k('options.profiles.restoreOne') : k('options.profiles.delete'), p.shipped ? 'undo' : 'trash');
         drop.dataset.profile = p.name;
         drop.addEventListener('click', () => {
           if (!window.confirm(t(p.shipped ? k('options.profiles.confirmRestoreOne') : k('options.profiles.confirmDelete'), { name: p.name }))) return;
@@ -78,7 +79,7 @@ export function renderProfilesTab(box: HTMLElement, folder: string, defaultBudge
       if (p.projectOverrides) row.append(note(k('options.profiles.projectOverrides')));
       body.append(row);
     }
-    const restore = button('restoreAllProfiles', k('options.profiles.restoreAll'));
+    const restore = button('restoreAllProfiles', k('options.profiles.restoreAll'), 'refresh');
     restore.addEventListener('click', () => {
       if (!window.confirm(t(k('options.profiles.confirmRestoreAll')))) return;
       void run(api('/api/profiles/restore', { method: 'POST' })).then((ok) => { if (ok) void showList(); });
@@ -154,8 +155,8 @@ export function renderProfilesTab(box: HTMLElement, folder: string, defaultBudge
     text.rows = 12;
     text.value = existing?.body ?? '';
 
-    const save = button('saveProfile', k('options.profiles.save'));
-    const cancel = button('cancelProfile', k('options.profiles.cancel'));
+    const save = button('saveProfile', k('options.profiles.save'), 'check');
+    const cancel = button('cancelProfile', k('options.profiles.cancel'), 'x');
     cancel.addEventListener('click', () => { error.textContent = ''; void showList(); });
     save.addEventListener('click', () => {
       const payload = {

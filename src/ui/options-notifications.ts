@@ -6,6 +6,7 @@ import { el, checkbox, note } from './dom';
 import { errorText } from './new-agent';
 import { FIELD_LABELS } from './options';
 import { attachClock } from './time-picker';
+import { setIconButton } from './icons';
 
 /**
  * The Notifications tab (SPEC 20.4, 22.2): which events notify, quiet hours, sound, grouping, the browser fallback, a test toast and
@@ -154,7 +155,7 @@ export function renderNotificationsTab(container: HTMLElement, state: StateMessa
   const test = el('button');
   test.type = 'button';
   test.name = 'testToast';
-  bindText(test, 'settings.notifications.test');
+  setIconButton(test, 'play', 'settings.notifications.test');
   const result = el('span', 'settings-note');
   test.addEventListener('click', () => {
     void api<{ ok: boolean }>('/api/notifications/test', { method: 'POST' }).then((res) => {

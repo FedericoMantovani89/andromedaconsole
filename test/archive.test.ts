@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { archiveAgent, archiveFinished, deleteAllArchived, deleteArchived, unarchiveAgent } from '../src/server/agents/archive';
+import { archiveAgent, archiveFinished, forceArchiveAgent, deleteAllArchived, deleteArchived, unarchiveAgent } from '../src/server/agents/archive';
 import { AgentPersister } from '../src/server/agents/persist';
 import { AgentRegistry } from '../src/server/agents/registry';
 import { restoreAgents } from '../src/server/agents/restore';
@@ -213,5 +213,32 @@ describe('archiveFinished', () => {
   });
   it('does nothing and counts zero when nothing is archivable', () => {
     expect(archiveFinished({ registry, ticketStatus: () => undefined })).toEqual({ count: 0, slugs: [] });
+  });
+});
+
+describe('forced archive (the trash button)', () => {
+  it('closes the session and archives an agent that is still "working", even if no process is left to exit', async () => {
+    start('a');
+    registry.onModEvent('a', { type: 'prompt.submit' } as never);
+    let closed = 0;
+    const out = await forceArchiveAgent({ registry, endSession: async () => { closed += 1; } }, 'a');
+    expect(out).toEqual({ ok: true });
+    expect(closed).toBe(1);
+    expect(registry.get('a')).toMatchObject({ state: 'finished', archived: true });
+  });
+  it('archives even when closing the process fails', async () => {
+    start('a');
+    const out = await forceArchiveAgent({ registry, endSession: async () => { throw new Error('gone'); } }, 'a');
+    expect(out).toEqual({ ok: true });
+    expect(registry.get('a')).toMatchObject({ state: 'finished', archived: true });
+  });
+  it('refuses the main, an archived agent and an unknown name', async () => {
+    registry.register({ slug: 'm', role: 'main', profile: 'main', goal: '' });
+    start('b');
+    registry.setArchived('b', true);
+    const d = { registry, endSession: async () => undefined };
+    expect(await forceArchiveAgent(d, 'm')).toEqual({ ok: false, code: 'agent.notArchivable' });
+    expect(await forceArchiveAgent(d, 'b')).toEqual({ ok: false, code: 'agent.notArchivable' });
+    expect(await forceArchiveAgent(d, 'zz')).toEqual({ ok: false, code: 'not_found' });
   });
 });

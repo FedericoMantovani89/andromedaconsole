@@ -15,6 +15,8 @@ import { renderNotificationsTab } from './options-notifications';
 import { renderSecretsTab } from './options-secrets';
 import { openSaveTemplateDialog } from './new-project';
 import { el, note } from './dom';
+import { closeDot } from './close-dot';
+import { setIconButton } from './icons';
 
 /** What `GET /api/options` returns (the config is the effective one, defaults filled in). */
 interface OptionsPayload {
@@ -501,7 +503,7 @@ function projectsTab(env: Env): HTMLElement {
     const copyBtn = el('button');
     copyBtn.type = 'button';
     copyBtn.name = 'copySettings';
-    bindText(copyBtn, 'options.projects.copy.apply');
+    setIconButton(copyBtn, 'copy', 'options.projects.copy.apply');
     const copied = note(k('options.projects.copy.help'));
     copyBtn.addEventListener('click', () => {
       if (!window.confirm(t(k('options.projects.copy.confirm'), { from: from.value }))) return;
@@ -524,7 +526,7 @@ function projectsTab(env: Env): HTMLElement {
   const apply = el('button');
   apply.type = 'button';
   apply.name = 'applyTemplate';
-  bindText(apply, 'options.projects.template.apply');
+  setIconButton(apply, 'check', 'options.projects.template.apply');
   apply.disabled = true;
   const applied = note(k('options.projects.template.help'));
   void api<{ id: string; name: Record<string, string>; valid: boolean }[]>('/api/templates').then((res) => {
@@ -553,7 +555,7 @@ function projectsTab(env: Env): HTMLElement {
   const template = el('button');
   template.type = 'button';
   template.name = 'saveTemplate';
-  bindText(template, 'options.projects.saveTemplate');
+  setIconButton(template, 'download', 'options.projects.saveTemplate');
   template.addEventListener('click', () => openSaveTemplateDialog(env.getState));
   box.append(template);
   return box;
@@ -655,7 +657,7 @@ function pluginsTab(env: Env): HTMLElement {
   const refresh = el('button');
   refresh.type = 'button';
   refresh.name = 'refreshPlugins';
-  bindText(refresh, 'options.plugins.refresh');
+  setIconButton(refresh, 'refresh', 'options.plugins.refresh');
   const lang = language();
   let installed: InstalledMap | undefined; // undefined: not asked yet
   const unreadable = note(k('options.plugins.installed.unreadable'));
@@ -722,7 +724,7 @@ function pluginsTab(env: Env): HTMLElement {
           cmd.name = 'installCommand';
           const copy = el('button');
           copy.type = 'button';
-          bindText(copy, 'options.plugins.copy');
+          setIconButton(copy, 'copy', 'options.plugins.copy');
           copy.addEventListener('click', () => {
             try { void navigator.clipboard.writeText(p.installCommand).catch(() => cmd.select()); } catch { cmd.select(); }
           });
@@ -839,21 +841,18 @@ export async function openOptions(getState: () => StateMessage | undefined, firs
       tabs.append(b);
     }
   }
-  const x = el('button', 'icon-btn dialog-x');
-  x.type = 'button';
-  x.name = 'closeOptions';
-  setTitle(x, 'common.close');
-  x.addEventListener('click', () => {
+  const x = closeDot(() => {
     const lang = startLanguage;
     closeOverlay();
     if (lang !== undefined && lang !== language()) void setLanguage(lang); // a language previewed but not saved goes back
   });
+  x.name = 'closeOptions';
   const save = el('button');
   save.type = 'button';
   save.name = 'saveOptions';
   const readNow = (): unknown[] => RESTART_PATHS.map((p) => getPath(env.options?.config, p) ?? getRestartDefault(p, getState()));
   const before = readNow();
-  bindText(save, 'common.save');
+  setIconButton(save, 'check', 'common.save');
   save.addEventListener('click', () => {
     save.disabled = true;
     void (async () => {

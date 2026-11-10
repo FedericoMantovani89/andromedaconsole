@@ -4,6 +4,8 @@ import { el, checkbox, showDialog } from './dom';
 import { bindText, k, setTitle } from './i18n-client';
 import { errorText } from './new-agent';
 import { closeOverlay } from './settings';
+import { closeDot } from './close-dot';
+import { setIconButton } from './icons';
 
 export interface TabHandlers {
   select(name: string): void;
@@ -26,15 +28,13 @@ export function renderProjectTabs(tabs: HTMLElement, projects: ProjectTab[], sel
     tab.textContent = p.name; // project name is data, not UI text
     tab.dataset.project = p.name;
     tab.addEventListener('click', () => h.select(p.name));
-    const close = el('button', 'tab-close');
+    const close = closeDot(() => h.close(p.name), k('projects.close'));
+    close.classList.add('tab-close');
     close.dataset.project = p.name;
-    bindText(close, 'projects.close');
-    close.addEventListener('click', () => h.close(p.name));
     tabs.append(tab, close);
   }
   const add = el('button', 'tab tab-add');
-  bindText(add, 'tabs.newProject');
-  setTitle(add, k('tabs.newProject.title'));
+  setIconButton(add, 'plus', k('tabs.newProject.title'));
   add.addEventListener('click', () => h.add());
   tabs.append(add);
 }
@@ -63,7 +63,7 @@ export function openCloseProjectDialog(name: string, last = false): void {
   const error = el('div', 'form-error');
   const actions = el('div', 'form-actions');
   const yes = el('button');
-  bindText(yes, 'projects.close.do');
+  setIconButton(yes, 'check', 'projects.close.do');
   yes.addEventListener('click', () => {
     void api<ApiError | { name: string }>(`/api/projects/${encodeURIComponent(name)}${purge.checked ? '?purge=1' : ''}`, { method: 'DELETE' }).then((res) => {
       if (res.status === 200) { closeOverlay(); if (last) location.reload(); }
@@ -71,7 +71,7 @@ export function openCloseProjectDialog(name: string, last = false): void {
     });
   });
   const cancel = el('button');
-  bindText(cancel, 'common.cancel');
+  setIconButton(cancel, 'x', 'common.cancel');
   cancel.addEventListener('click', closeOverlay);
   actions.append(yes, cancel);
   showDialog([message, purgeRow, error, actions]);

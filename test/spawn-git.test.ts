@@ -54,8 +54,8 @@ it('the prompt file tells the agent its branch, its folder and that the console 
   const prompt = readFileSync(join(t.repo, '.andromedaconsole', 'state', 'prompts', 'agent-fix-login.md'), 'utf8');
   expect(prompt).toContain('agent/shop-api/fix-login');
   expect(prompt).toContain(worktreePathFor(t.repo, 'fix-login'));
-  expect(prompt).toContain('mcp__console-mod__step_done');
-  expect(prompt).toContain('mcp__console-mod__checklist_set');
+  expect(prompt).toContain('mcp__andromeda-mcp__step_done');
+  expect(prompt).toContain('mcp__andromeda-mcp__checklist_set');
   expect(prompt).toMatch(/never run git commit/i);
   // review finding: a fresh worktree has only tracked files, and the console validates in that same folder
   expect(prompt).toMatch(/install the dependencies/i);

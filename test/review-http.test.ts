@@ -104,7 +104,7 @@ it('request_review starts a read-only reviewer in a detached checkout of the del
   const goal = (await inbox(s, 'review-fix-login')).join('\n');
   expect(goal).toContain('fix-login');
   expect(goal).toContain('git diff project/shop-api...HEAD');
-  expect(goal).toContain('mcp__console-mod__review_verdict');
+  expect(goal).toContain('mcp__andromeda-mcp__review_verdict');
   expect(await tool(s, 'shop-api', 'request_review', { name: 'fix-login' })).toMatchObject({ body: { status: 'refused', code: 'not_delivered' } });
 });
 it('the reviewer has the verdict tool and the guard keeps it read-only; it has no ticket tools of an author', async () => {

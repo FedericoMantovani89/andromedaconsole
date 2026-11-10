@@ -118,7 +118,7 @@ export class LoopService {
       this.d.tickets.move(slug, 'blocked');
     });
     await this.effect(slug, 'stop', () => this.d.stop(slug));
-    await this.effect(slug, 'tellMain', () => this.d.tellMain(`"${slug}" was stopped on a loop (${evidence}). Call mcp__console-mod__start_recovery with name ${slug}.`));
+    await this.effect(slug, 'tellMain', () => this.d.tellMain(`"${slug}" was stopped on a loop (${evidence}). Call mcp__andromeda-mcp__start_recovery with name ${slug}.`));
   }
 
   /**

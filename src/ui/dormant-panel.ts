@@ -39,7 +39,7 @@ export function createDormantPanel(info: SessionInfo, onCompact?: (slug: string)
   const wake = el('button');
   wake.type = 'button';
   wake.className = 'panel-wake';
-  bindText(wake, 'panel.wake');
+  setIconButton(wake, 'play', 'panel.wake');
   wake.addEventListener('mousedown', (ev) => ev.preventDefault()); // a button here must not take the keyboard
   wake.addEventListener('click', () => {
     wake.disabled = true;

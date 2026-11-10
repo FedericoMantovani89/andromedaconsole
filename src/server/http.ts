@@ -18,7 +18,7 @@ import type { ModelCatalog } from './catalog/models';
 import type { PluginCatalog } from './catalog/plugins';
 import { fail, readBodyOr400, readObjectBody, send } from './http-util';
 import { handleV1, type V1Context } from './v1';
-import { archiveAgent, archiveFinished, deleteAllArchived, deleteArchived, unarchiveAgent } from './agents/archive';
+import { archiveAgent, archiveFinished, forceArchiveAgent, deleteAllArchived, deleteArchived, unarchiveAgent } from './agents/archive';
 import { spawnAgent } from './agents/spawn';
 import type { Scheduler } from './agents/scheduler';
 import type { ReadingStore } from './reading/store';
@@ -476,6 +476,16 @@ export function createRequestHandler(source: Context | ProjectResolver, host: Ho
       const out = archiveFinished({ registry: ctx.registry, ticketStatus });
       if (out.count > 0) ctx.broadcastState();
       return send(res, 200, out);
+    }
+
+    // Forced archive (the trash button of a stuck agent): closes the process, state finished, archived; ticket untouched.
+    const forceArchive = /^\/api\/agents\/([a-z0-9]+(?:-[a-z0-9]+)*)\/force-archive$/.exec(path);
+    if (req.method === 'POST' && forceArchive) {
+      const slug = forceArchive[1]!;
+      const out = await forceArchiveAgent({ registry: ctx.registry, endSession: async (s) => { ctx.requests.agentGone(s); await ctx.ptys.killTree(s); } }, slug);
+      if (!out.ok) return out.code === 'not_found' ? fail(res, 404, 'not_found') : fail(res, 409, out.code);
+      ctx.broadcastState();
+      return send(res, 200, { ok: true });
     }
 
     // Archive: only a flag moves, nothing is closed or deleted (the panel's button and the archive list).

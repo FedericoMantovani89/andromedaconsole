@@ -6,6 +6,7 @@ import { api } from './api';
 import { openInstallDialog } from './install-dialog';
 import { bindText, k, language, languageName, resolveLanguage, setLanguage } from './i18n-client';
 import { el } from './dom';
+import { setIconButton } from './icons';
 
 /** The helpers the console counts (the ids of the optional tools whose use is measured). */
 const HELPER_COUNT_IDS: Record<string, true> = { python: true, rg: true, ctags: true, jq: true, fd: true, shellcheck: true, uv: true };
@@ -97,7 +98,7 @@ function appendRecheck(container: HTMLElement, recheckHost: HTMLElement | undefi
   const again = el('button');
   if (requiredOnly) {
     // The first-start wizard: check again, so the user can go on once a required tool is there.
-    bindText(again, 'prereq.recheck');
+    setIconButton(again, 'refresh', 'prereq.recheck');
     again.addEventListener('click', () => recheck(container, recheckHost, requiredOnly, usage));
   } else {
     // Options: a program installed after the console started is not on the PATH this process was given, and the console never reads the

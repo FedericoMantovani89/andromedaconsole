@@ -4,6 +4,7 @@ import { el, showDialog } from './dom';
 import { bindText, k } from './i18n-client';
 import { errorText } from './new-agent';
 import { closeOverlay } from './settings';
+import { setIconButton } from './icons';
 
 /**
  * The question after Save when a setting the sessions read only when they start has changed (bypass, guard mode, agent model). Yes asks
@@ -23,12 +24,12 @@ export function openRestartDialog(): void {
   const no = el('button');
   no.type = 'button';
   no.name = 'restartNo';
-  bindText(no, 'common.no');
+  setIconButton(no, 'x', 'common.no');
   no.addEventListener('click', closeOverlay);
   const yes = el('button');
   yes.type = 'button';
   yes.name = 'restartYes';
-  bindText(yes, 'common.yes');
+  setIconButton(yes, 'check', 'common.yes');
   yes.addEventListener('click', () => {
     yes.disabled = true;
     no.disabled = true;

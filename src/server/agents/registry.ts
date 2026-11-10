@@ -123,6 +123,20 @@ export class AgentRegistry {
     a.stopping = o.stopped === true;
   }
 
+  /**
+   * The user's forced end (the trash button of a panel): `finished` and archived whatever the state was, even when no process is left to
+   * report its exit. The ticket is not touched.
+   */
+  forceFinish(slug: string): void {
+    const a = this.agents.get(slug);
+    if (!a) return;
+    a.finishing = true;
+    a.stopping = false;
+    a.pendingGoal = false;
+    this.set(a, 'finished');
+    this.setArchived(slug, true);
+  }
+
   /** Archives or un-archives by hand. False for an unknown name. */
   setArchived(slug: string, archived: boolean): boolean {
     const a = this.agents.get(slug);

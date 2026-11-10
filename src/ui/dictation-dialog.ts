@@ -5,6 +5,7 @@ import { focusElementFromUser } from './focus';
 import { bindText, k, language, setTitle, t } from './i18n-client';
 import { setIconButton } from './icons';
 import { closeOverlay } from './settings';
+import { closeDot } from './close-dot';
 
 /**
  * Voice dictation for the main: record a clip with the browser's microphone, have the console transcribe it (the server calls Groq, so the
@@ -50,12 +51,8 @@ export async function openDictationDialog(getState: () => StateMessage | undefin
   bindText(title, 'dictation.title');
   const body = el('div', 'dictation-body');
   const error = el('div', 'form-error');
-  // The same X in the corner as the Options dialog, not a Close button.
-  const close = el('button', 'icon-btn dialog-x');
-  close.type = 'button';
+  const close = closeDot(closeOverlay);
   close.name = 'closeDictation';
-  setTitle(close, 'common.close');
-  close.addEventListener('click', closeOverlay);
   const actions = el('div', 'form-actions');
   dialog.append(close, title, body, error, actions);
   overlay.replaceChildren(dialog);
@@ -73,7 +70,7 @@ export async function openDictationDialog(getState: () => StateMessage | undefin
     const open = el('button');
     open.type = 'button';
     open.name = 'dictationOpenSecrets';
-    bindText(open, 'dictation.openSecrets');
+    setIconButton(open, 'key', 'dictation.openSecrets');
     open.addEventListener('click', () => { void import('./options').then((m) => m.openOptions(getState, 'secrets')); });
     actions.append(open);
     return;
@@ -110,7 +107,7 @@ export async function openDictationDialog(getState: () => StateMessage | undefin
   const send = el('button');
   send.type = 'button';
   send.name = 'dictationSend';
-  bindText(send, 'dictation.send');
+  setIconButton(send, 'send', 'dictation.send');
   actions.append(send, record);
 
   type Phase = 'idle' | 'opening' | 'recording' | 'transcribing' | 'sending';

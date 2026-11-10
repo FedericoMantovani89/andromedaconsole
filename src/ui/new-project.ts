@@ -5,6 +5,7 @@ import { focusElementFromUser } from './focus';
 import { bindText, k } from './i18n-client';
 import { errorText } from './new-agent';
 import { closeOverlay } from './settings';
+import { setIconButton } from './icons';
 
 /** Label of the button that opens the save-as-template dialog (the Options dialog of 6E binds it). */
 export const SAVE_TEMPLATE_LABEL = k('templates.save.open');
@@ -34,10 +35,10 @@ function actions(submitKey: string, onCancel: () => void): { box: HTMLElement; s
   const box = el('div', 'form-actions');
   const submit = el('button');
   submit.type = 'submit';
-  bindText(submit, submitKey);
+  setIconButton(submit, 'check', submitKey);
   const cancel = el('button');
   cancel.type = 'button';
-  bindText(cancel, 'common.cancel');
+  setIconButton(cancel, 'x', 'common.cancel');
   cancel.addEventListener('click', onCancel);
   box.append(submit, cancel);
   return { box, submit };
@@ -77,7 +78,7 @@ export function openNewProjectDialog(getState: () => StateMessage | undefined, o
   const browse = el('button');
   browse.type = 'button';
   browse.className = 'browse-folder';
-  bindText(browse, 'projects.new.browse');
+  setIconButton(browse, 'folder', 'projects.new.browse');
   const browseNote = el('p', 'settings-note browse-note');
   browse.addEventListener('click', () => {
     browseNote.textContent = '';

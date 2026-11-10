@@ -512,7 +512,7 @@ async function onConsoleTool(/** @type {Engine} */ $, /** @type {string} */ name
 async function onNativeQuestion(/** @type {Engine} */ $, /** @type {Ev} */ e, /** @type {Next} */ next) {
   try {
     if (ctx && ctx.role === 'agent') {
-      return { deny: 'You cannot ask the user directly. Ask the main session instead: mcp__console-mod__send_message {type: "question", to: <the main, see list_agents>, text} with the question and, if it has fixed choices, every option written out; the answer arrives later as a message.' };
+      return { deny: 'You cannot ask the user directly. Ask the main session instead: mcp__andromeda-mcp__send_message {type: "question", to: <the main, see list_agents>, text} with the question and, if it has fixed choices, every option written out; the answer arrives later as a message.' };
     }
     // The model fills in no answer of its own to a release question: only the user's choice in the dialog counts.
     // Any answers/annotations in the input could be keyed on a release question the dialog never showed: refused whatever the questions say.
@@ -561,7 +561,7 @@ async function onToolCheck(/** @type {Engine} */ $, /** @type {Ev} */ e, /** @ty
   const verdict = await next(e);
   try {
     if (!ctx || ctx.role === 'main' || !e.tool_use_id || !verdict || verdict.decision !== 'ask') return verdict;
-    if (e.tool === 'AskUserQuestion' || String(e.tool).indexOf('mcp__console-mod__') === 0) return verdict;
+    if (e.tool === 'AskUserQuestion' || String(e.tool).indexOf('mcp__andromeda-mcp__') === 0) return verdict;
     const a = await askConsole($, verdict.reason || 'Permission requested', undefined, false,
       { kind: 'permission', tool: String(e.tool), detail: describeInput(e.input), key: permissionKey(e.input) });
     if (!a.ok) return verdict;
@@ -621,18 +621,18 @@ export const register = (on) => {
   // One hook per event without a matcher: the engine refuses a second turn.complete hook (seen in the Task 4 spike).
   on('turn.complete', ($, e, next) => onTurnComplete($, e, next));
 
-  on('tool.call', { tool: 'mcp__console-mod__spawn_agent' }, ($, e) => onConsoleTool($, 'spawn_agent', e));
-  on('tool.call', { tool: 'mcp__console-mod__list_agents' }, ($, e) => onConsoleTool($, 'list_agents', e));
-  on('tool.call', { tool: 'mcp__console-mod__ask_user' }, ($, e) => onConsoleTool($, 'ask_user', e));
-  on('tool.call', { tool: 'mcp__console-mod__checklist_set' }, ($, e) => onConsoleTool($, 'checklist_set', e));
-  on('tool.call', { tool: 'mcp__console-mod__step_done' }, ($, e) => onConsoleTool($, 'step_done', e));
-  on('tool.call', { tool: 'mcp__console-mod__report_blocked' }, ($, e) => onConsoleTool($, 'report_blocked', e));
-  on('tool.call', { tool: 'mcp__console-mod__ticket_report' }, ($, e) => onConsoleTool($, 'ticket_report', e));
-  on('tool.call', { tool: 'mcp__console-mod__request_review' }, ($, e) => onConsoleTool($, 'request_review', e));
-  on('tool.call', { tool: 'mcp__console-mod__send_back_ticket' }, ($, e) => onConsoleTool($, 'send_back_ticket', e));
-  on('tool.call', { tool: 'mcp__console-mod__merge_ticket' }, ($, e) => onConsoleTool($, 'merge_ticket', e));
-  on('tool.call', { tool: 'mcp__console-mod__propose_release' }, ($, e) => onConsoleTool($, 'propose_release', e));
-  on('tool.call', { tool: 'mcp__console-mod__review_verdict' }, ($, e) => onConsoleTool($, 'review_verdict', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__spawn_agent' }, ($, e) => onConsoleTool($, 'spawn_agent', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__list_agents' }, ($, e) => onConsoleTool($, 'list_agents', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__ask_user' }, ($, e) => onConsoleTool($, 'ask_user', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__checklist_set' }, ($, e) => onConsoleTool($, 'checklist_set', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__step_done' }, ($, e) => onConsoleTool($, 'step_done', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__report_blocked' }, ($, e) => onConsoleTool($, 'report_blocked', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__ticket_report' }, ($, e) => onConsoleTool($, 'ticket_report', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__request_review' }, ($, e) => onConsoleTool($, 'request_review', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__send_back_ticket' }, ($, e) => onConsoleTool($, 'send_back_ticket', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__merge_ticket' }, ($, e) => onConsoleTool($, 'merge_ticket', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__propose_release' }, ($, e) => onConsoleTool($, 'propose_release', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__review_verdict' }, ($, e) => onConsoleTool($, 'review_verdict', e));
   on('tool.call', { tool: 'Bash' }, ($, e, next) => guardCall($, 'Bash', e, next));
   on('tool.call', { tool: 'PowerShell' }, ($, e, next) => guardCall($, 'PowerShell', e, next));
   on('tool.call', { tool: 'Write' }, ($, e, next) => guardCall($, 'Write', e, next));
@@ -647,12 +647,12 @@ export const register = (on) => {
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e, next) => onNativeQuestion($, e, next));
   on('tool.check', ($, e, next) => onToolCheck($, e, next));
   // Last: `claude plugin validate` cuts its list of hooks at a fixed length, and test/mod.test.ts checks the earlier ones by name.
-  on('tool.call', { tool: 'mcp__console-mod__start_recovery' }, ($, e) => onConsoleTool($, 'start_recovery', e));
-  on('tool.call', { tool: 'mcp__console-mod__recovery_report' }, ($, e) => onConsoleTool($, 'recovery_report', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__start_recovery' }, ($, e) => onConsoleTool($, 'start_recovery', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__recovery_report' }, ($, e) => onConsoleTool($, 'recovery_report', e));
   on('session.measure', ($, e, next) => onMeasure($, e, next));
-  on('tool.call', { tool: 'mcp__console-mod__resume_agent' }, ($, e) => onConsoleTool($, 'resume_agent', e));
-  on('tool.call', { tool: 'mcp__console-mod__archive_agent' }, ($, e) => onConsoleTool($, 'archive_agent', e));
-  on('tool.call', { tool: 'mcp__console-mod__worktree_cleanup' }, ($, e) => onConsoleTool($, 'worktree_cleanup', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__resume_agent' }, ($, e) => onConsoleTool($, 'resume_agent', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__archive_agent' }, ($, e) => onConsoleTool($, 'archive_agent', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__worktree_cleanup' }, ($, e) => onConsoleTool($, 'worktree_cleanup', e));
   on('tool.call', { tool: 'Task' }, ($, e, next) => guardCall($, 'Task', e, next)); // the older name of the Agent tool
-  on('tool.call', { tool: 'mcp__console-mod__send_message' }, ($, e) => onConsoleTool($, 'send_message', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__send_message' }, ($, e) => onConsoleTool($, 'send_message', e));
 };

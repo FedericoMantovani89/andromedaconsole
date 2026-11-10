@@ -12,6 +12,25 @@ export function archiveAgent(d: { registry: AgentRegistry; ticketStatus(slug: st
   return { ok: true };
 }
 
+export type ForceArchiveOutcome = { ok: true } | { ok: false; code: 'not_found' | 'agent.notArchivable' };
+
+/**
+ * Archives an agent that got stuck (the trash button): its process is closed if one is left, its state becomes `finished` and it is
+ * archived, whatever it was. Only the agent moves: its ticket, worktree and transcript stay. Never for the main or an archived agent.
+ */
+export async function forceArchiveAgent(
+  d: { registry: AgentRegistry; endSession(slug: string): Promise<void> },
+  slug: string,
+): Promise<ForceArchiveOutcome> {
+  const a = d.registry.get(slug);
+  if (!a) return { ok: false, code: 'not_found' };
+  if (a.role === 'main' || a.archived) return { ok: false, code: 'agent.notArchivable' };
+  d.registry.markFinished(slug);
+  try { await d.endSession(slug); } catch { /* the state below does not depend on the process */ }
+  d.registry.forceFinish(slug);
+  return { ok: true };
+}
+
 /** Brings an archived agent back to the column (a no-op for one that is not archived). */
 export function unarchiveAgent(d: { registry: AgentRegistry }, slug: string): ArchiveOutcome {
   if (!d.registry.get(slug)) return { ok: false, code: 'not_found' };

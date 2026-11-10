@@ -6,6 +6,7 @@ import { api, wsUrl } from './api';
 import { bindText, k } from './i18n-client';
 import { closeOverlay } from './settings';
 import { el } from './dom';
+import { closeDot } from './close-dot';
 
 const RESULT_KEYS = {
   done: k('prereq.install.result.done'),
@@ -30,9 +31,8 @@ export function openInstallTerminal(terminalId: string, onClose: () => void = cl
   const result = el('p', 'install-result');
   const note = el('p', 'settings-note');
   bindText(note, 'prereq.install.closeNote');
-  const close = el('button');
-  bindText(close, 'common.close');
-  dialog.append(title, host, result, note, close);
+  const close = closeDot();
+  dialog.append(close, title, host, result, note);
   overlay.replaceChildren(dialog);
   overlay.hidden = false;
 

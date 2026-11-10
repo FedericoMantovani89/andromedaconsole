@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderStatusBar } from '../src/ui/statusbar';
 import type { SessionInfo, StateMessage } from '../src/shared/protocol';
 
-const params = (el: Element) => JSON.parse((el as HTMLElement).dataset.i18nParams ?? '{}');
+const params = (el: Element) => JSON.parse((el as HTMLElement).dataset.i18nTitleParams ?? (el as HTMLElement).dataset.i18nParams ?? '{}'); // an icon button keeps its words in the tooltip
 const byKey = (root: HTMLElement, key: string): HTMLElement | undefined => [...root.querySelectorAll<HTMLElement>('[data-i18n]')].find((e) => e.dataset.i18n === key);
 const info = (slug: string, state: SessionInfo['state'], status: SessionInfo['status'] = 'running'): SessionInfo => ({ slug, state, status, role: 'agent', profile: 'developer' });
 const make = (extra: Partial<StateMessage> = {}): StateMessage => ({ main: info('main', 'idle'), agents: [], ...extra } as unknown as StateMessage);
@@ -84,7 +84,7 @@ describe('sleep indicator and the resume button', () => {
     expect(typeof params(shown).time).toBe('string');
     expect(button.hidden).toBe(false);
     expect(button.disabled).toBe(false);
-    expect(button.dataset.i18n).toBe('statusbar.resumeNow');
+    expect(button.dataset.i18nTitle).toBe('statusbar.resumeNow');
     // the countdown moves on its own between state pushes
     vi.advanceTimersByTime(5000);
     expect(params(byKey(el, 'statusbar.sleep')!).remaining).toBe('2:00:00');
@@ -176,7 +176,7 @@ describe('update item (SPEC 33.4)', () => {
     const el = document.createElement('div');
     renderStatusBar(el, make({ update: { phase: 'available', version: '0.0.2' } }));
     const b = buttons(el).find((x) => !x.hidden)!;
-    expect(b.dataset.i18n).toBe('statusbar.update.download');
+    expect(b.dataset.i18nTitle).toBe('statusbar.update.download');
     b.click();
     await new Promise((r) => setTimeout(r, 0));
     expect(calls).toEqual([{ url: '/api/update/download', method: 'POST' }]);
@@ -190,7 +190,7 @@ describe('update item (SPEC 33.4)', () => {
     expect(buttons(el).every((b) => b.hidden)).toBe(true);
     renderStatusBar(el, make({ update: { phase: 'ready', version: '0.0.2' } }));
     const b = buttons(el).find((x) => !x.hidden)!;
-    expect(b.dataset.i18n).toBe('statusbar.update.install');
+    expect(b.dataset.i18nTitle).toBe('statusbar.update.install');
     b.click();
     await new Promise((r) => setTimeout(r, 0));
     expect(calls).toEqual([{ url: '/api/update/install', method: 'POST' }]);
@@ -218,7 +218,7 @@ describe('state problems', () => {
     renderStatusBar(el, make({ stateProblems: [problem('a.json', 'a.json.corrupt-1'), problem('.andromedaconsole/state/agents.json', '.andromedaconsole/state/agents.json.corrupt-2')] }));
     const chip = el.querySelector<HTMLElement>('.statusbar-problem')!;
     expect(chip.hidden).toBe(false);
-    expect(chip.dataset.i18n).toBe('statusbar.stateProblem');
+    expect(chip.dataset.i18nTitle).toBe('statusbar.stateProblem');
     expect(params(chip)).toEqual({ file: '.andromedaconsole/state/agents.json', movedTo: '.andromedaconsole/state/agents.json.corrupt-2' });
   });
 

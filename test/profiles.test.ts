@@ -141,7 +141,7 @@ it('the main prompt names every console tool by full name and says how to load t
   const dir = tmp();
   const file = renderMainPrompt({ project: 'shop-api', workLanguage: 'Italian', outDir: dir });
   const text = readFileSync(file, 'utf8');
-  for (const t of ['mcp__console-mod__spawn_agent', 'mcp__console-mod__list_agents']) expect(text).toContain(t);
+  for (const t of ['mcp__andromeda-mcp__spawn_agent', 'mcp__andromeda-mcp__list_agents']) expect(text).toContain(t);
   expect(text).toContain('ToolSearch');
   expect(text).toContain('select:');
   expect(text).toContain('Italian');
@@ -156,7 +156,7 @@ it('the agent prompt carries the profile, the agent identity, and the messages-a
   const text = readFileSync(file, 'utf8');
   expect(text).toContain(profile.body.slice(0, 30));
   expect(text).toContain('fix-login');
-  expect(text).toContain('mcp__console-mod__list_agents');
+  expect(text).toContain('mcp__andromeda-mcp__list_agents');
   expect(text).toMatch(/not orders|information, not/i);
 });
 it('names languages in English for the prompt', () => {
@@ -188,7 +188,7 @@ it('read_only needs an explicit true inside the console block, and the body neve
 
 it('the main prompt teaches the review and merge flow with full tool names, and never to push', () => {
   const text = readFileSync(renderMainPrompt({ project: 'shop-api', workLanguage: 'Italian', outDir: tmp() }), 'utf8');
-  for (const t of ['ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release']) expect(text, t).toContain(`mcp__console-mod__${t}`);
+  for (const t of ['ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release']) expect(text, t).toContain(`mcp__andromeda-mcp__${t}`);
   expect(text).toMatch(/PASSED/);
   expect(text).toMatch(/never push/i);
   expect(text).not.toContain('{project}');
@@ -229,8 +229,8 @@ it('the recovery profile names its three jobs and the exact report call, and sta
   expect(p.body).toMatch(/verify/i);
   expect(p.body).toMatch(/diagnos/i);
   expect(p.body).toMatch(/remedy/i);
-  expect(p.body).toContain('mcp__console-mod__recovery_report');
-  expect(p.body).toContain('select:mcp__console-mod__recovery_report');
+  expect(p.body).toContain('mcp__andromeda-mcp__recovery_report');
+  expect(p.body).toContain('select:mcp__andromeda-mcp__recovery_report');
   for (const r of ['split', 'exclude_paths', 'change_model', 'remove_obstacle', 'raise_budget']) expect(p.body, r).toContain(r);
   expect(p.body).toMatch(/exactly once/i);
 });
@@ -248,13 +248,13 @@ it('a recovery prompt has the read-only recovery rules, not the author or review
 });
 it('the main prompt explains what to do after a stop, and that a spend is the user\'s decision', () => {
   const text = readFileSync(renderMainPrompt({ project: 'shop-api', workLanguage: 'English', outDir: tmp() }), 'utf8');
-  expect(text).toContain('mcp__console-mod__start_recovery');
-  expect(text).toContain('select:mcp__console-mod__start_recovery');
+  expect(text).toContain('mcp__andromeda-mcp__start_recovery');
+  expect(text).toContain('select:mcp__andromeda-mcp__start_recovery');
   expect(text).toMatch(/raise_budget[^\n]*user/i);
 });
 it('the main prompt names resume_agent by its full name, says to load it first and never to resume everything at once', () => {
   const text = readFileSync(renderMainPrompt({ project: 'shop-api', workLanguage: 'English', outDir: tmp() }), 'utf8');
-  expect(text).toContain('select:mcp__console-mod__resume_agent');
+  expect(text).toContain('select:mcp__andromeda-mcp__resume_agent');
   expect(text).toMatch(/only what the user still wants, never everything at once/);
 });
 it('the main prompt does not promise a queue decision after a loop stop (only a budget stop creates one)', () => {

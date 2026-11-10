@@ -16,7 +16,7 @@ import { wipCommitFor } from './helpers';
 import type { ProjectContainer } from './services';
 
 /** The one message the main gets when a usage limit resets (SPEC 18.4). */
-export const WAKE_MESSAGE = 'The subscription limit was reset. Check the suspended tickets with list_agents and resume them with mcp__console-mod__resume_agent.';
+export const WAKE_MESSAGE = 'The subscription limit was reset. Check the suspended tickets with list_agents and resume them with mcp__andromeda-mcp__resume_agent.';
 /** How long a wake-up probe waits for the next quota reading before it counts as still limited. */
 const WAKE_WAIT_MS = 60_000;
 

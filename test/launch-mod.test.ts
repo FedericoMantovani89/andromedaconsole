@@ -23,9 +23,9 @@ it('the session token is the one in CONSOLE_TOKEN', () => {
 });
 
 it('pre-approves the console tools so they do not stop at a permission prompt, as one comma-separated argument', () => {
-  const l = buildClaudeLaunch({ ...base, allowedTools: ['mcp__console-mod__list_agents', 'mcp__console-mod__ask_user'] });
+  const l = buildClaudeLaunch({ ...base, allowedTools: ['mcp__andromeda-mcp__list_agents', 'mcp__andromeda-mcp__ask_user'] });
   const i = l.args.indexOf('--allowedTools');
-  expect(l.args[i + 1]).toBe('mcp__console-mod__list_agents,mcp__console-mod__ask_user');
+  expect(l.args[i + 1]).toBe('mcp__andromeda-mcp__list_agents,mcp__andromeda-mcp__ask_user');
   expect(buildClaudeLaunch(base).args).not.toContain('--allowedTools');
 });
 

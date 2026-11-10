@@ -80,3 +80,31 @@ export function findStrayFocus(sourceText: string): number[] {
   visit(sf);
   return lines;
 }
+
+/**
+ * Buttons created as `el('button', ...)` or `document.createElement('button')` that never go through `setIconButton(name, ...)` in the same
+ * file: a button shows an icon and its words are the tooltip. `name` is the variable the button is kept in ('' when it is not kept).
+ */
+export function findTextOnlyButtons(sourceText: string): { line: number; name: string }[] {
+  const sf = ts.createSourceFile('x.ts', sourceText, ts.ScriptTarget.ES2022, true);
+  const iconed = new Set<string>();
+  const created: { line: number; name: string }[] = [];
+  const nameOf = (n: tsNs.Expression): string => (ts.isIdentifier(n) ? n.text : ts.isPropertyAccessExpression(n) ? n.name.text : '');
+  const isButtonCall = (n: tsNs.Node): n is tsNs.CallExpression => {
+    if (!ts.isCallExpression(n)) return false;
+    const callee = ts.isPropertyAccessExpression(n.expression) ? n.expression.name.text : ts.isIdentifier(n.expression) ? n.expression.text : '';
+    const first = n.arguments[0];
+    return (callee === 'el' || callee === 'createElement') && first !== undefined && ts.isStringLiteralLike(first) && first.text === 'button';
+  };
+  const visit = (n: tsNs.Node) => {
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'setIconButton' && n.arguments[0]) iconed.add(nameOf(n.arguments[0]));
+    if (isButtonCall(n)) {
+      const p = n.parent;
+      const name = ts.isVariableDeclaration(p) && ts.isIdentifier(p.name) ? p.name.text : ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.EqualsToken ? nameOf(p.left) : '';
+      created.push({ line: sf.getLineAndCharacterOfPosition(n.getStart()).line + 1, name });
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return created.filter((c) => c.name === '' || !iconed.has(c.name));
+}

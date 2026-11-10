@@ -84,7 +84,7 @@ describe('budget queue entry', () => {
     const { el } = createBudgetEntry(item, (a) => sent.push(a));
     const buttons = [...el.querySelectorAll('button')];
     expect(buttons.map((b) => b.dataset.answer)).toEqual(['raise', 'close', 'recover']);
-    expect(buttons.map((b) => b.dataset.i18n)).toEqual(['queue.budget.raise', 'queue.budget.close', 'queue.budget.recover']);
+    expect(buttons.map((b) => b.dataset.i18nTitle)).toEqual(['queue.budget.raise', 'queue.budget.close', 'queue.budget.recover']);
     buttons.forEach((b) => b.click());
     expect(sent).toEqual(['raise', 'close', 'recover']);
     const title = el.querySelector<HTMLElement>('.queue-text')!;
@@ -124,7 +124,7 @@ describe('recovery raise decision', () => {
     expect(el.querySelector<HTMLElement>('.queue-why')!.dataset.i18n).toBe('queue.decision.reason.recovery_raise');
     const buttons = [...el.querySelectorAll('button')];
     expect(buttons.map((b) => b.dataset.answer)).toEqual(['approve', 'decline']);
-    expect(buttons.map((b) => b.dataset.i18n)).toEqual(['queue.decision.approveRaise', 'queue.decision.decline']);
+    expect(buttons.map((b) => b.dataset.i18nTitle)).toEqual(['queue.decision.approveRaise', 'queue.decision.decline']);
     buttons.forEach((b) => b.click());
     expect(sent).toEqual(['approve', 'decline']);
     expect(el.textContent).toContain('the work is bigger than the budget');
@@ -179,7 +179,7 @@ describe('recovery change_model decision', () => {
     expect(el.querySelector<HTMLElement>('.queue-why')!.dataset.i18n).toBe('queue.decision.reason.recovery_change_model');
     const buttons = [...el.querySelectorAll('button')];
     expect(buttons.map((b) => b.dataset.answer)).toEqual(['restart', 'leave']);
-    expect(buttons.map((b) => b.dataset.i18n)).toEqual(['queue.decision.restart', 'queue.decision.leave']);
+    expect(buttons.map((b) => b.dataset.i18nTitle)).toEqual(['queue.decision.restart', 'queue.decision.leave']);
     expect(el.textContent).toContain('too subtle for this model');
   });
 });

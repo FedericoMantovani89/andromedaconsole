@@ -7,18 +7,18 @@ Your work area (set up by the console; do not change it):
 - Your worktree is a fresh checkout with only tracked files: no node_modules, no build output, no .env. Install the dependencies yourself (for example npm install, or the project's own command) before running tests; the console runs the validation in this same folder, so it needs them too. Tests that need real secrets cannot run here: use .env.example values or tell the main with report_blocked.
 
 How a ticket works (tools are deferred: load each with ToolSearch query select:<full name> before first use):
-1. Study the code first, then call mcp__console-mod__checklist_set with items: an array of step titles. The console refuses a checklist that does not follow this skeleton, and tells you why:
+1. Study the code first, then call mcp__andromeda-mcp__checklist_set with items: an array of step titles. The console refuses a checklist that does not follow this skeleton, and tells you why:
    - step 1 starts with "Study" (what you found: files, conventions, risks);
    - step 2 starts with "Tests" (write the tests first; they may be red);
    - then your small, verifiable implementation steps;
    - the second to last step starts with "Validation" (the full test suite);
    - the last step starts with "Update documentation".
    At least 5 steps. You may add steps later by calling checklist_set again; closed steps cannot change.
-2. Do a step, then call mcp__console-mod__step_done with n (the step number) and note. Steps close in order. Step 1 needs a note with what you found. The console commits each step.
+2. Do a step, then call mcp__andromeda-mcp__step_done with n (the step number) and note. Steps close in order. Step 1 needs a note with what you found. The console commits each step.
 3. At the validation step the console runs the project's test command itself. If it fails you get the output: fix the problem and call step_done again. Your own claim that tests pass is not enough. If you ran the suite yourself (the console may have the tests switched off), pass tests {command, result: "passed" or "failed", summary} to step_done: the ticket report shows it as your claim, not verified by the console.
 4. The documentation step must change a doc file (README, CHANGELOG, docs) or carry a note of at least 10 characters saying why nothing needs to change. Write the details in a file under docs/ (one file per topic, extend the existing one if there is one). CLAUDE.md and AGENTS.md are loaded into every session: add at most one line to them, a pointer to that file, never a paragraph.
 5. Skipping a step needs skip: true and a written reason of at least 20 characters in note.
-6. If you cannot go on, call mcp__console-mod__report_blocked with the reason, and wait: the main session is told.
+6. If you cannot go on, call mcp__andromeda-mcp__report_blocked with the reason, and wait: the main session is told.
 7. When the last step closes, the console pushes your branch and tells the main. You are done.
 Your checklist is also saved in {worktree}/.andromedaconsole/checklist.md (read it again after your context is compacted).
 

@@ -1,5 +1,6 @@
 import { el, keepFocus } from './dom';
 import { bindText } from './i18n-client';
+import { closeDot } from './close-dot';
 
 /**
  * The shell shared by the side drawers (the question queue, the requests between agents): a header with the title and a close button, a
@@ -8,9 +9,7 @@ import { bindText } from './i18n-client';
 export function createDrawerShell(root: HTMLElement, titleKey: string, emptyKey: string) {
   const title = el('h2');
   bindText(title, titleKey);
-  const close = el('button');
-  bindText(close, 'common.close');
-  keepFocus(close);
+  const close = closeDot();
   const head = el('div', 'drawer-head');
   head.append(title, close);
   const list = el('div', 'queue-list');

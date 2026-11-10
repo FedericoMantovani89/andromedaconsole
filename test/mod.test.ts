@@ -11,7 +11,7 @@ it.skipIf(!hasClaude)('claude plugin validate accepts the mod and lists the expe
   const out = validate();
   expect(out).toMatch(/Validation passed/);
   for (const hook of ['session.start', 'session.end', 'turn.start', 'turn.complete', 'tool.call{tool=AskUserQuestion}',
-    'tool.call{tool=mcp__console-mod__spawn_agent}', 'tool.call{tool=mcp__console-mod__list_agents}', 'tool.call{tool=mcp__console-mod__ask_user}']) {
+    'tool.call{tool=mcp__andromeda-mcp__spawn_agent}', 'tool.call{tool=mcp__andromeda-mcp__list_agents}', 'tool.call{tool=mcp__andromeda-mcp__ask_user}']) {
     expect(out, hook).toContain(hook);
   }
   for (const call of ['$.http.fetch', '$.tool.register', '$.prompt.submit', '$.clock.every', '$.session.id', '$.session.usage']) {
@@ -28,16 +28,16 @@ it('the module has no setTimeout and no dynamic env names (not available or refu
   expect(src).not.toMatch(/setTimeout|setInterval/);
   for (const m of src.matchAll(/\$\.env\.get\(([^)]*)\)/g)) expect(m[1]).toMatch(/^'CONSOLE_[A-Z]+'$/);
 });
-it('the manifest names the plugin console-mod (tool names are mcp__console-mod__<tool>)', () => {
+it('the manifest names the plugin andromeda-mcp (tool names are mcp__andromeda-mcp__<tool>)', () => {
   const manifest = JSON.parse(readFileSync(join(modDir, '.claude-plugin', 'plugin.json'), 'utf8'));
-  expect(manifest.name).toBe('console-mod');
+  expect(manifest.name).toBe('andromeda-mcp');
 });
 // `claude plugin validate` cuts its hook list ("... [+N chars]") before the hooks added last, so the Phase 5 hooks are checked by
 // name in the module itself; their call ($.session.usage) is in the validator's calls line above.
 it('the Phase 5 hooks are registered by name in the module', () => {
   const src = readFileSync(join(modDir, 'hooks', 'register.js'), 'utf8');
   expect(src).toContain("on('session.measure'");
-  for (const tool of ['start_recovery', 'recovery_report', 'resume_agent', 'archive_agent', 'worktree_cleanup']) expect(src, tool).toContain(`{ tool: 'mcp__console-mod__${tool}' }`);
+  for (const tool of ['start_recovery', 'recovery_report', 'resume_agent', 'archive_agent', 'worktree_cleanup']) expect(src, tool).toContain(`{ tool: 'mcp__andromeda-mcp__${tool}' }`);
   expect(src).toContain('$.session.usage()');
 });
 
@@ -46,8 +46,8 @@ it('send_message is registered for the main and the agents, with its call, and l
   expect(src).toMatch(/main: \[[^\]]*'send_message'/);
   expect(src).toMatch(/agent: \[[^\]]*'send_message'/);
   expect(src).not.toMatch(/(reviewer|recovery): \[[^\]]*'send_message'/);
-  expect(src).toContain("{ tool: 'mcp__console-mod__send_message' }");
+  expect(src).toContain("{ tool: 'mcp__andromeda-mcp__send_message' }");
   expect(src).toContain("if (name === 'send_message') return { to: e.to, type: e.type, text: e.text, in_reply_to: e.in_reply_to, step:");
   // Last: `claude plugin validate` cuts its hook list, so new hooks go after every earlier one.
-  expect(src.indexOf("mcp__console-mod__send_message' }")).toBeGreaterThan(src.indexOf("on('tool.call', { tool: 'Task' }"));
+  expect(src.indexOf("mcp__andromeda-mcp__send_message' }")).toBeGreaterThan(src.indexOf("on('tool.call', { tool: 'Task' }"));
 });

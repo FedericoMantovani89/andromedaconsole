@@ -199,7 +199,7 @@ export class QuotaService {
     }
     await this.effect('applyLimits', () => this.d.applyLimits(to));
     const pct = Math.round(percent);
-    const resume = ' Tickets suspended for the limit can be resumed with mcp__console-mod__resume_agent.';
+    const resume = ' Tickets suspended for the limit can be resumed with mcp__andromeda-mcp__resume_agent.';
     const text = to === 'none'
       ? `Usage limit back below the first threshold (${pct}%): agents can start again as usual.${resume}`
       : to === 'halve'

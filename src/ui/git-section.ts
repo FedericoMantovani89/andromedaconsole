@@ -3,6 +3,7 @@ import { api } from './api';
 import { bindText, k, setPlaceholder } from './i18n-client';
 import { infoIcon } from './info-icon';
 import { el } from './dom';
+import { setIconButton } from './icons';
 
 
 /** A bold title with its (i): what the thing does and why is in the tooltip, not in lines under it. */
@@ -39,7 +40,7 @@ export function renderGitProject(state: StateMessage | undefined, fail: (res: { 
   const init = el('button');
   init.type = 'button';
   init.name = 'gitInit';
-  bindText(init, 'options.git.init.apply');
+  setIconButton(init, 'plus', 'options.git.init.apply');
   initBlock.append(titled(k('options.git.init.title'), repos.length > 0 ? k('options.git.init.tip.holds') : k('options.git.init.tip')), init);
 
   // Or start from a repository that already exists: its address, then a clone into this (empty) folder. No password goes through here.
@@ -52,7 +53,7 @@ export function renderGitProject(state: StateMessage | undefined, fail: (res: { 
   const clone = el('button');
   clone.type = 'button';
   clone.name = 'gitClone';
-  bindText(clone, 'options.git.clone.apply');
+  setIconButton(clone, 'download', 'options.git.clone.apply');
   const cloneRow = el('div', 'options-select-row');
   cloneRow.append(url, clone);
   cloneBlock.append(titled(k('options.git.clone'), k('options.git.clone.help')), cloneRow);

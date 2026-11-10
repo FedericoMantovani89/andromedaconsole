@@ -25,6 +25,7 @@ for (const f of files) {
   const text = readFileSync(f, 'utf8');
   for (const m of text.matchAll(/\b(?:t|k)\(\s*['"]([\w.]+)['"]\s*[,)]/g)) used.add(m[1]!);
   for (const m of text.matchAll(/\b(?:bindText|setPlaceholder|checkbox)\(\s*[^,]+,\s*['"]([\w.]+)['"]/g)) used.add(m[1]!);
+  for (const m of text.matchAll(/\bsetIconButton\(\s*[^,]+,\s*['"]\w+['"],\s*['"]([\w.]+)['"]/g)) used.add(m[1]!); // an icon button's words are its tooltip key
   for (const m of text.matchAll(/\bt\(\s*['"]([\w.]+\.)['"]\s*\+/g)) dynamicPrefixes.push(m[1]!);
   for (const m of text.matchAll(/\bt\(\s*`([\w.]+\.)\$\{/g)) dynamicPrefixes.push(m[1]!);
   for (const m of text.matchAll(/\b(?:bindText|checkbox)\(\s*[^,]+,\s*`([\w.]+\.)\$\{/g)) dynamicPrefixes.push(m[1]!);

@@ -331,7 +331,7 @@ const ALLOW_AGENT: [string, () => Call][] = [
   ['Grep path src', () => ({ tool: 'Grep', input: { pattern: 'x', path: 'src' } })],
   ['WebFetch', () => ({ tool: 'WebFetch', input: { url: 'http://x' } })],
   ['TodoWrite', () => ({ tool: 'TodoWrite', input: {} })],
-  ['console tool', () => ({ tool: 'mcp__console-mod__step_done', input: {} })],
+  ['console tool', () => ({ tool: 'mcp__andromeda-mcp__step_done', input: {} })],
 ];
 
 describe('guard rules — agent must deny', () => {

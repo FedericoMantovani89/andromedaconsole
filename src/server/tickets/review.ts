@@ -120,7 +120,7 @@ export function reviewerGoal(i: ReviewerGoalInput): string {
   }
   lines.push(
     '',
-    'When you are done call the tool mcp__console-mod__review_verdict (it is deferred: load it first with ToolSearch, query select:mcp__console-mod__review_verdict) with',
+    'When you are done call the tool mcp__andromeda-mcp__review_verdict (it is deferred: load it first with ToolSearch, query select:mcp__andromeda-mcp__review_verdict) with',
     '{ pass, notes }. pass is false when there is at least one high or medium problem a user would hit; every note has severity (high, medium or low), where (file:line) and text with a concrete failing scenario.',
     'Call it exactly once, then stop.',
   );
