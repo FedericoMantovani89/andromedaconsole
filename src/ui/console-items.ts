@@ -1,5 +1,5 @@
 import type { QueueItem } from '../shared/protocol';
-import { bindText, k } from './i18n-client';
+import { bindText, k, t } from './i18n-client';
 import { renderInto } from './markdown-lazy';
 import { formatWhen } from './statusbar';
 import { keepFocus } from './dom';
@@ -14,7 +14,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
 
 const ANSWER_ICONS: Record<string, IconName> = {
-  approve: 'check', ok: 'check', allow: 'check', allow_always: 'checkDouble', reject: 'x', decline: 'x', deny: 'x', deny_always: 'ban', send_back: 'undo', leave: 'minus', follow_up: 'send', restart: 'refresh', raise: 'plus', close: 'archive', recover: 'refresh',
+  approve: 'check', ok: 'check', allow: 'check', allow_always: 'checkDouble', reject: 'x', decline: 'x', deny: 'x', deny_always: 'ban', send_back: 'undo', review_anyway: 'play', leave: 'minus', follow_up: 'send', restart: 'refresh', raise: 'plus', close: 'archive', recover: 'refresh',
 };
 
 /** An answer button of a queue entry: an icon for the answer, its words in the tooltip; sends `value`, never takes the keyboard. */
@@ -135,12 +135,14 @@ const REASON_KEYS: Record<string, string> = {
   merge_tests_failed_author_gone: k('queue.decision.reason.merge_tests_failed_author_gone'),
   central_red_author_gone: k('queue.decision.reason.central_red_author_gone'),
   central_red_undecided: k('queue.decision.reason.central_red_undecided'),
+  audit_limits: k('queue.decision.reason.audit_limits'),
   recovery_raise: k('queue.decision.reason.recovery_raise'),
   recovery_change_model: k('queue.decision.reason.recovery_change_model'),
 };
 const OPTION_KEYS: Record<string, string> = {
   send_back: k('queue.decision.send_back'),
   approve: k('queue.decision.approve'),
+  review_anyway: k('queue.decision.reviewAnyway'),
   leave: k('queue.decision.leave'),
   follow_up: k('queue.decision.followUp'),
   restart: k('queue.decision.restart'),
@@ -176,6 +178,18 @@ export function createDecisionEntry(item: QueueItem, send: (answer: string) => v
   }
   const notes = arr(p.notes);
   if (notes.length > 0) el.append(details(k('queue.decision.notes'), {}, noteList(notes)));
+  // The audit's limits that are over (the numbers the console measured), and where the full report is.
+  const over = arr(p.over).filter(isObj);
+  if (over.length > 0) {
+    const list = document.createElement('ul');
+    list.className = 'queue-detail';
+    for (const o of over) {
+      const li = document.createElement('li');
+      li.textContent = `${t(`audit.metric.${str(o.id)}`)}: ${num(o.value)} / ${num(o.limit)}`;
+      list.append(li);
+    }
+    el.append(details(k('queue.decision.audit.limits'), {}, list));
+  }
   const tests = isObj(p.tests) ? p.tests : undefined;
   if (tests && tests.ok === false) {
     const pre = document.createElement('pre');

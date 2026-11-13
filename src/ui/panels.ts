@@ -11,6 +11,7 @@ import { setIconButton } from './icons';
 import { createArchiveButton, createForceArchiveButton, syncArchiveButton } from './archive';
 import { openChecklistDialog } from './checklist-dialog';
 import { createCompactButton, createDormantPanel } from './dormant-panel';
+import { applyAudit } from './audit-card';
 import { STATE_KEYS, applyBudget, applyLoop, applyProgress, applyRequests, applyTicket, applyWaiting } from './chips';
 import { SCROLLBACK, TERM_OPTIONS } from './term-theme';
 import { FocusState, focusActiveTerminal, refreshActiveStyles, type PanelHandle } from './focus';
@@ -94,6 +95,9 @@ function createPanel(info: SessionInfo, onActivate: (slug: string) => void, proj
   const ticketEl = document.createElement('span');
   ticketEl.className = 'panel-ticket';
   ticketEl.hidden = true;
+  const auditEl = document.createElement('span');
+  auditEl.className = 'panel-audit';
+  auditEl.hidden = true;
   const budgetEl = document.createElement('span');
   budgetEl.className = 'panel-budget';
   budgetEl.hidden = true;
@@ -114,7 +118,7 @@ function createPanel(info: SessionInfo, onActivate: (slug: string) => void, proj
   setIconButton(readBtn, 'clipboard', k('reader.open'));
   readBtn.addEventListener('mousedown', (ev) => ev.preventDefault()); // a button here must not take the keyboard
   readBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('console-open-reader', { detail: info.slug })));
-  header.append(info.role === 'main' ? title : nameBlock(title, meta), ...(info.role === 'main' ? [meta] : []), badge, stateEl, stalledEl, ticketEl, budgetEl, loopEl, waitingEl, requestsWaitingEl, requestsOwedEl, progressEl);
+  header.append(info.role === 'main' ? title : nameBlock(title, meta), ...(info.role === 'main' ? [meta] : []), badge, stateEl, stalledEl, ticketEl, auditEl, budgetEl, loopEl, waitingEl, requestsWaitingEl, requestsOwedEl, progressEl);
   // Voice dictation goes to the main, so only the main's panel has the button (built once with the header, never re-parented).
   if (info.role === 'main') {
     const micBtn = document.createElement('button');
@@ -182,6 +186,7 @@ function createPanel(info: SessionInfo, onActivate: (slug: string) => void, proj
       applyWaiting(waitingEl, waiting);
       applyStalled(stalledEl, stall);
       applyTicket(ticketEl, ticket);
+      applyAudit(auditEl, info.slug, ticket?.audit);
       bindText(stateEl, STATE_KEYS[state]);
       stateEl.className = `panel-state ${state}`;
       applyProgress(progressEl, progress);
@@ -211,7 +216,7 @@ export class Workspace {
   /** The expanded panels of dormant agents (no process, so no terminal): built once, dropped when the agent wakes or is no longer a panel. */
   private readonly dormantPanels = new Map<string, HTMLElement>();
   /** Bars are kept between updates: rebuilding them would move every node after them and drop the keyboard focus. */
-  private readonly bars = new Map<string, { el: HTMLElement; state: HTMLElement; progress: HTMLElement; stalled: HTMLElement; ticket: HTMLElement; budget: HTMLElement; loop: HTMLElement; waiting: HTMLElement; requestsWaiting: HTMLElement; requestsOwed: HTMLElement; pending: boolean; dormant: boolean; stale: HTMLElement }>();
+  private readonly bars = new Map<string, { el: HTMLElement; state: HTMLElement; progress: HTMLElement; stalled: HTMLElement; ticket: HTMLElement; audit: HTMLElement; budget: HTMLElement; loop: HTMLElement; waiting: HTMLElement; requestsWaiting: HTMLElement; requestsOwed: HTMLElement; pending: boolean; dormant: boolean; stale: HTMLElement }>();
 
   /** `project` is the project this workspace shows: its terminals connect with it, whichever tab is on screen. */
   constructor(private readonly mainCol: HTMLElement, private readonly agentsCol: HTMLElement, mainId: string, private readonly project?: string) {
@@ -339,6 +344,7 @@ export class Workspace {
       applyProgress(cached.progress, info.progress);
       applyStalled(cached.stalled, stallOf(info));
       applyTicket(cached.ticket, info.ticket);
+      applyAudit(cached.audit, info.slug, info.ticket?.audit);
       applyBudget(cached.budget, info);
       applyLoop(cached.loop, info.loop);
       applyWaiting(cached.waiting, info.waiting);
@@ -366,6 +372,8 @@ export class Workspace {
     applyStalled(stalled, stallOf(info));
     const ticket = document.createElement('span');
     applyTicket(ticket, info.ticket);
+    const audit = document.createElement('span');
+    applyAudit(audit, info.slug, info.ticket?.audit);
     const budget = document.createElement('span');
     applyBudget(budget, info);
     const loop = document.createElement('span');
@@ -378,7 +386,7 @@ export class Workspace {
     applyRequests(requestsWaiting, requestsOwed, info.requests);
     const stale = document.createElement('span');
     applyStale(stale, info.stale);
-    el.append(nameBlock(title, meta), state, stalled, ticket, budget, loop, waiting, requestsWaiting, requestsOwed, stale, progress, createArchiveButton(info.slug), createForceArchiveButton(info.slug, info.role));
+    el.append(nameBlock(title, meta), state, stalled, ticket, audit, budget, loop, waiting, requestsWaiting, requestsOwed, stale, progress, createArchiveButton(info.slug), createForceArchiveButton(info.slug, info.role));
     syncArchiveButton(el, info.state, info.ticket);
     if (dormant) this.dormantControls(el, info.slug);
     if (!pending) { // a queued agent has no terminal to expand yet
@@ -388,7 +396,7 @@ export class Workspace {
       expand.addEventListener('click', () => { this.collapsed.delete(info.slug); this.expanded = info.slug; this.update(this.lastMain!, this.lastAgents); });
       el.append(expand);
     }
-    this.bars.set(info.slug, { el, state, progress, stalled, ticket, budget, loop, waiting, requestsWaiting, requestsOwed, pending, dormant, stale });
+    this.bars.set(info.slug, { el, state, progress, stalled, ticket, audit, budget, loop, waiting, requestsWaiting, requestsOwed, pending, dormant, stale });
     return el;
   }
 

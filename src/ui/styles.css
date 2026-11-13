@@ -115,6 +115,21 @@ button[disabled] { opacity: .45; cursor: default; }
 .panel-ticket.conflict, .panel-ticket.needs_user, .panel-ticket.changes_requested,
 .panel-ticket.suspended_budget, .panel-ticket.suspended_limit, .panel-ticket.recovering { color: var(--warn); border-color: var(--warn); }
 .panel-ticket.blocked { color: var(--bad); border-color: var(--bad); }
+.panel-audit { padding: 0 7px; border: 1px solid var(--seam-strong); border-radius: 9px; font-size: 11.5px; line-height: 17px; cursor: pointer; }
+.panel-audit[hidden] { display: none; }
+.panel-audit.ready { color: var(--ok); border-color: var(--ok); }
+.panel-audit.needs_changes { color: var(--warn); border-color: var(--warn); }
+.panel-audit.split_first { color: var(--bad); border-color: var(--bad); }
+.options-audit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 0 0 12px; align-items: start; }
+.options-audit-head-inline { display: flex; gap: 6px; align-items: center; }
+.options-audit-head { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; font-weight: 600; }
+.audit-dialog { min-width: 360px; max-width: 640px; }
+.audit-body h4 { margin: 12px 0 4px; font-size: 12px; text-transform: none; color: var(--muted); }
+.audit-body div { margin: 2px 0; overflow-wrap: anywhere; }
+.audit-verdict { font-weight: 600; }
+.audit-verdict.ready { color: var(--ok); }
+.audit-verdict.needs_changes { color: var(--warn); }
+.audit-verdict.split_first, .audit-over { color: var(--bad); }
 .panel-waiting { color: var(--accent); border-color: var(--accent); }
 .panel-requests.waiting { color: var(--accent); border-color: var(--accent); }
 .panel-requests.owed { color: var(--warn); border-color: var(--warn); }

@@ -13,6 +13,7 @@ import { renderGitProject } from './git-section';
 import { renderTryCheckouts } from './try-section';
 import { renderNotificationsTab } from './options-notifications';
 import { renderSecretsTab } from './options-secrets';
+import { renderAuditTab } from './options-audit';
 import { openSaveTemplateDialog } from './new-project';
 import { el, note } from './dom';
 import { closeDot } from './close-dot';
@@ -48,7 +49,7 @@ type InstalledMap = Record<string, PluginStatus> | null;
 /** The left column: what holds for the whole console first, then what belongs to the open project (each group has a small heading). */
 export const OPTION_GROUPS = [
   { id: 'global', tabs: ['models', 'profiles', 'budget', 'guard', 'notifications', 'language', 'prerequisites', 'plugins', 'secrets'] },
-  { id: 'project', tabs: ['projects', 'git'] },
+  { id: 'project', tabs: ['projects', 'git', 'audit'] },
 ] as const;
 export const OPTION_TABS = OPTION_GROUPS.flatMap((g) => g.tabs);
 export type OptionTab = (typeof OPTION_TABS)[number];
@@ -767,6 +768,14 @@ const BUILDERS: Record<OptionTab, (env: Env) => HTMLElement> = {
     renderSecretsTab(box, env.stage);
     return box;
   },
+  audit: (env) => {
+    const box = el('div');
+    renderAuditTab(box, {
+      state: env.state, config: getPath(env.options?.config, 'audit') as { level?: string; autoModel?: boolean; profile?: string } | undefined, stage: env.stage,
+      setConfig: (path, value) => { if (env.options) setPath(env.options.config, path, value); }, editing: env.profileEditing,
+    });
+    return box;
+  },
 };
 
 /** Where a restart-relevant setting is when the options payload has no value for it (the guard tab reads the state, not the config). */
@@ -879,7 +888,7 @@ export async function openOptions(getState: () => StateMessage | undefined, firs
       else closeOverlay();
     })();
   });
-  syncSave = (): void => { save.hidden = editingProfile && current === 'profiles'; };
+  syncSave = (): void => { save.hidden = editingProfile && (current === 'profiles' || current === 'audit'); };
   // The note about when settings apply is said once, here, next to Save (and stays when Save is hidden by the profile form).
   const foot = el('div', 'options-foot');
   foot.append(note(k('settings.appliesToNew')), save);

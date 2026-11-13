@@ -48,6 +48,10 @@ import type { QuotaState } from './budget/quota';
 import type { SleepTimer } from './budget/sleep';
 import type { StateProblems } from './state-problems';
 import { handleDictationRoute } from './dictation-api';
+import { handleStyleRoute } from './style-api';
+import { SLUG_RE } from '../shared/slug';
+import { latestAudit } from './audit/report';
+import { effectiveAudit } from './audit/settings';
 import { typeIntoSession } from './dictation';
 import { failProject, handleProjectsRoute, type ProjectsApi } from './projects-api';
 
@@ -201,7 +205,7 @@ export function buildState(ctx: Context): StateMessage {
     const base = suspended ? 'suspended' : stateOf(slug);
     // Where the ticket is in the review pipeline: kept after the worktree is gone (a merged ticket still says "Merged").
     const pipeline = ticket && rt?.role === 'agent' && (ticket.status !== 'in_progress' || ticket.round > 0 || ctx.testPosition?.(slug) !== undefined)
-      ? { ticket: { status: ticket.status, round: ticket.round, maxRounds: MAX_REWORK_ROUNDS, ...(ctx.testPosition?.(slug) !== undefined ? { testQueue: ctx.testPosition(slug) } : {}) } }
+      ? { ticket: { status: ticket.status, round: ticket.round, maxRounds: MAX_REWORK_ROUNDS, ...(ctx.testPosition?.(slug) !== undefined ? { testQueue: ctx.testPosition(slug) } : {}), ...(ctx.review.auditSummary(slug) ? { audit: ctx.review.auditSummary(slug) } : {}) } }
       : {};
     // No budget (a reviewer, an agent without a worktree) is left out, so the UI shows n/a rather than zero.
     const usage = rt?.role === 'agent' ? ctx.budget.usage(slug, ticket) : undefined;
@@ -249,7 +253,8 @@ export function buildState(ctx: Context): StateMessage {
   let model: string | undefined;
   let maxActive: number | undefined;
   let offeredProfiles: string[] | undefined;
-  try { ({ testCommand, testCommands, repoTestCommands, testsDisabled, squash, model, maxActive, profiles: offeredProfiles } = ctx.store.project); } catch { /* a damaged project.json: shown as not set */ }
+  let auditOverride: Pick<ProjectInfo, 'auditLevel' | 'auditAutoModel' | 'auditProfile'> = {};
+  try { ({ testCommand, testCommands, repoTestCommands, testsDisabled, squash, model, maxActive, profiles: offeredProfiles, auditLevel: auditOverride.auditLevel, auditAutoModel: auditOverride.auditAutoModel, auditProfile: auditOverride.auditProfile } = ctx.store.project); } catch { /* a damaged project.json: shown as not set */ }
   const repos = ctx.repos();
   const tryCheckouts = ctx.tryCheckouts.list();
   // A folder that holds several repositories: each one has its own row in Options, with what its own files suggest.
@@ -267,7 +272,7 @@ export function buildState(ctx: Context): StateMessage {
     ...(slept.phase !== 'awake' ? { sleep: { ...(slept.until !== undefined ? { until: slept.until } : {}), phase: slept.phase, attempt: slept.attempt, weekly: slept.kind === 'seven_day' } } : {}),
     // One project per console today: the stricter of the global and the per-project limit is the one that holds.
     limits: { active: ctx.scheduler.activeCount(), max: (({ global, perProject }) => Math.min(global, perProject))(ctx.scheduler.effectiveLimits()) },
-    type: 'state', project: { name: ctx.projectName, ...(testCommand ? { testCommand } : {}), ...(testCommands ? { testCommands } : {}), ...(ctx.detectedTestCommand() ? { detectedTestCommand: ctx.detectedTestCommand() } : {}), repos: repoNames, ...(repoTestCommands ? { repoTestCommands } : {}), ...(Object.keys(detectedRepos).length > 0 ? { detectedRepoTestCommands: detectedRepos } : {}), ...(squash !== undefined ? { squash } : {}), ...(testsDisabled ? { testsDisabled } : {}), ...(model ? { model } : {}), ...(maxActive !== undefined ? { maxActive } : {}), ...(tryCheckouts.length > 0 ? { tryCheckouts } : {}) }, settings: { bypassPermissions: ctx.bypass, guardMode: ctx.guardMode, worktrees: ctx.git.worktrees }, main, agents, language: ctx.language, languages: [...ctx.bundles.keys()].sort(), profiles: pickableProfiles(offeredProfiles, profileNamesOf(ctx.projectRoot, join(dirname(ctx.configPath), 'profiles'))),
+    type: 'state', project: { name: ctx.projectName, ...(testCommand ? { testCommand } : {}), ...(testCommands ? { testCommands } : {}), ...(ctx.detectedTestCommand() ? { detectedTestCommand: ctx.detectedTestCommand() } : {}), repos: repoNames, ...(repoTestCommands ? { repoTestCommands } : {}), ...(Object.keys(detectedRepos).length > 0 ? { detectedRepoTestCommands: detectedRepos } : {}), ...(squash !== undefined ? { squash } : {}), ...(testsDisabled ? { testsDisabled } : {}), ...(model ? { model } : {}), ...(maxActive !== undefined ? { maxActive } : {}), ...(auditOverride.auditLevel !== undefined ? { auditLevel: auditOverride.auditLevel } : {}), ...(auditOverride.auditAutoModel !== undefined ? { auditAutoModel: auditOverride.auditAutoModel } : {}), ...(auditOverride.auditProfile !== undefined ? { auditProfile: auditOverride.auditProfile } : {}), ...(tryCheckouts.length > 0 ? { tryCheckouts } : {}) }, settings: { bypassPermissions: ctx.bypass, guardMode: ctx.guardMode, worktrees: ctx.git.worktrees }, main, agents, language: ctx.language, languages: [...ctx.bundles.keys()].sort(), profiles: pickableProfiles(offeredProfiles, profileNamesOf(ctx.projectRoot, join(dirname(ctx.configPath), 'profiles'))),
     prereq: ctx.getPrereq(), helperUse: ctx.getHelperUse(), needsSetup: ctx.needsSetup(), projectIsRepo: repos.length > 0, repos, projectRoot: ctx.projectRoot,
     ...(() => { const rows = ctx.requests.rows(); return rows.length > 0 ? { requests: rows } : {}; })(),
     queue: ctx.questions.pending(),
@@ -582,6 +587,25 @@ export function createRequestHandler(source: Context | ProjectResolver, host: Ho
         config, errors, paths: { configDir: dir, profilesDir, templatesDir: join(dir, 'templates') }, server: { port: ctx.getPort() },
         profiles: listProfileNames(ctx.projectRoot, profilesDir).map((name) => ({ name, source: loadProfile(name, ctx.projectRoot, profilesDir)?.source ?? null })),
       });
+    }
+    // The style profiles of the audit (Options, Audit): files in the config folder and in the project's .andromedaconsole.
+    if (path === '/api/style' || path.startsWith('/api/style/')) {
+      const host = { projectRoot: ctx.projectRoot, userDir: join(dirname(ctx.configPath), 'style'), active: () => {
+        const global = loadConfig(ctx.configPath).config.audit;
+        const project = ctx.store.fields().auditProfile;
+        return { global: global.profile, ...(project ? { project } : {}), effective: effectiveAudit(global, ctx.store.fields()).profile };
+      } };
+      if (await handleStyleRoute(host, req, res, path, url)) return;
+    }
+    // The audit of one delivered ticket: the latest report, and the button that starts the model part (the same as the main's request_audit).
+    const ticketAudit = /^\/api\/tickets\/([^/]+)\/audit$/.exec(path);
+    if (ticketAudit && !SLUG_RE.test(ticketAudit[1]!)) return fail(res, 422, 'slug.format');
+    if (ticketAudit && req.method === 'GET') return send(res, 200, { audit: latestAudit(ctx.projectRoot, ticketAudit[1]!) ?? null });
+    if (ticketAudit && req.method === 'POST') {
+      const r = await ctx.review.requestAudit(ticketAudit[1]!);
+      if (r.ok) return send(res, 200, { auditor: r.auditor });
+      const measure = !['level_off', 'not_delivered', 'no_worktree', 'spawn_failed', 'already_running', 'no_measures'].includes(r.code);
+      return measure ? fail(res, 409, 'audit.measureFailed', { reason: r.detail ?? r.code }) : fail(res, 409, `audit.${r.code}`, r.detail ? { reason: r.detail } : undefined);
     }
     // Profiles (Options, Profiles): the user's own files in the config folder; a shipped name is edited as a copy and restored by removing it.
     const userProfiles = join(dirname(ctx.configPath), 'profiles');
