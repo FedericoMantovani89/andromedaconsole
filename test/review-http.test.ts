@@ -210,7 +210,8 @@ it('the state tells the UI where each ticket is in the pipeline (nothing for a t
   expect(await ticketOf()).toMatchObject({ status: 'in_review' });
   expect(await ticketOf('review-fix-login')).toBeUndefined(); // a reviewer has no ticket of its own
   await tool(s, 'review-fix-login', 'review_verdict', { pass: false, notes: NOTES });
-  expect(await ticketOf()).toEqual({ status: 'in_progress', round: 1, maxRounds: 2 }); // rework 1 of 2
+  // rework 1 of 2; the delivered commit was audited when the review was asked for (SPEC 15.7), so the state carries the verdict
+  expect(await ticketOf()).toEqual({ status: 'in_progress', round: 1, maxRounds: 2, audit: { verdict: 'ready', level: 'metrics', modelRan: false } });
   await finishRework(s, t, 'fix-login', 7);
   await tool(s, 'shop-api', 'request_review', { name: 'fix-login' });
   await tool(s, 'review-fix-login-r2', 'review_verdict', { pass: true });

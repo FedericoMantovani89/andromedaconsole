@@ -28,10 +28,10 @@ export interface V1Context {
 const EVENT_TYPES: ModEvent['type'][] = ['session.start', 'session.end', 'turn.start', 'turn.complete', 'quota'];
 
 /** Which role may call which console tool (SPEC 13.4). An agent's native AskUserQuestion reaches ask_user through the mod. */
-const TOOL_ROLES: Record<string, Role[]> = {
+export const TOOL_ROLES: Record<string, Role[]> = {
   spawn_agent: ['main'],
-  list_agents: ['main', 'agent', 'reviewer', 'recovery'],
-  ask_user: ['main', 'agent', 'reviewer', 'recovery'],
+  list_agents: ['main', 'agent', 'reviewer', 'recovery', 'auditor'],
+  ask_user: ['main', 'agent', 'reviewer', 'recovery', 'auditor'],
   // The ticket flow belongs to agents: the console commits, validates and pushes on their behalf (SPEC 8.4).
   checklist_set: ['agent'],
   step_done: ['agent'],
@@ -45,6 +45,9 @@ const TOOL_ROLES: Record<string, Role[]> = {
   merge_ticket: ['main'],
   propose_release: ['main'],
   review_verdict: ['reviewer'],
+  // The anti-slop audit (SPEC 15.7): the main asks for the model part, the auditor answers once, the console does the rest.
+  request_audit: ['main'],
+  audit_report: ['auditor'],
   // Recovery after a stop (SPEC 16.5): the main asks, the recovery reports once, the console restarts the ticket.
   start_recovery: ['main'],
   recovery_report: ['recovery'],

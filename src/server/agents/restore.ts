@@ -35,7 +35,7 @@ export interface RestoreDeps {
 
 const STOPPED: readonly TicketStatus[] = ['suspended_budget', 'suspended_limit', 'blocked'];
 
-const roleOf = (r: AgentRecord): Role => r.role ?? (r.profile === 'reviewer' ? 'reviewer' : r.profile === 'recovery' ? 'recovery' : 'agent');
+const roleOf = (r: AgentRecord): Role => r.role ?? (r.profile === 'reviewer' ? 'reviewer' : r.profile === 'recovery' ? 'recovery' : r.profile === 'auditor' ? 'auditor' : 'agent');
 
 /**
  * Brings the agents of an earlier run back into the registry without starting a process (SPEC 19). Pure bookkeeping: the caller

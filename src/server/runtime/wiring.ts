@@ -65,6 +65,8 @@ export function wire(c: ProjectContainer): void {
     // Nor a recovery that ends without its report, also one the console ended: the ticket waits again in the status it was stopped
     // in (after an accepted report this is a no-op: the report already forgot the session).
     if (registry.get(id)?.role === 'recovery' && recovery.abandon(id)) broadcast();
+    // An auditor that ends without its report: only the main is told (a report already removed it, so this is then a no-op).
+    if (registry.get(id)?.role === 'auditor' && !registry.get(id)?.finishing && review.abandonAudit(id)) broadcast();
     // A resumed agent whose process ended before its session reported in never ran: its ticket waits again, and the main is told.
     if (resumedAwaitingStart.delete(id) && registry.get(id)?.role === 'agent' && ticketStatusOf(id) === 'in_progress') {
       try { tickets.move(id, 'suspended_limit'); } catch { /* told below anyway */ }

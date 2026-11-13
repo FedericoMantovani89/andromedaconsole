@@ -4,36 +4,16 @@ import { resourcePath } from './paths';
 import { configDir } from './config';
 import type { Profile } from '../shared/profile';
 import { SLUG_RE } from '../shared/slug';
+import { parseFrontmatter } from './frontmatter';
 
 export type { Profile };
 
 const promptsDir = (): string => resourcePath('prompts');
 
-/** Frontmatter subset: top-level `key: value` lines; nested blocks (like `console:`) are skipped. */
-function parseFrontmatter(text: string): { meta: Record<string, string>; consoleKeys: Record<string, string>; body: string } {
-  const normalized = text.replace(/\r\n/g, '\n');
-  if (!normalized.startsWith('---\n')) return { meta: {}, consoleKeys: {}, body: normalized.trim() };
-  const end = normalized.indexOf('\n---', 4);
-  if (end === -1) return { meta: {}, consoleKeys: {}, body: normalized.trim() };
-  const meta: Record<string, string> = {};
-  const consoleKeys: Record<string, string> = {};
-  let block = '';
-  for (const line of normalized.slice(4, end).split('\n')) {
-    const m = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line); // indented lines do not match: they belong to a nested block
-    if (m) {
-      block = m[2] === '' ? m[1]! : '';
-      if (m[2] !== '') meta[m[1]!] = m[2]!.trim();
-      continue;
-    }
-    const nested = /^\s+([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
-    if (nested && block === 'console') consoleKeys[nested[1]!] = nested[2]!.trim();
-  }
-  return { meta, consoleKeys, body: normalized.slice(end + 4).replace(/^\n+/, '').trim() };
-}
-
 function readProfile(file: string, name: string, source: Profile['source']): Profile | undefined {
   if (!existsSync(file)) return undefined;
-  const { meta, consoleKeys, body } = parseFrontmatter(readFileSync(file, 'utf8'));
+  const { meta, blocks, body } = parseFrontmatter(readFileSync(file, 'utf8'));
+  const consoleKeys = blocks.console ?? {};
   const model = meta.model && meta.model !== 'default' && /^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/.test(meta.model) ? meta.model : undefined;
   const bt = Number(consoleKeys.budget_tokens);
   const budgetTokens = Number.isInteger(bt) && bt >= 1000 ? bt : undefined;
@@ -49,7 +29,7 @@ export function loadProfile(name: string, projectRoot: string, userDir: string =
 }
 
 const shippedDir = (): string => join(promptsDir(), 'profiles');
-const SHIPPED_ORDER = ['developer', 'backend', 'frontend', 'dba', 'reviewer', 'recovery'];
+const SHIPPED_ORDER = ['developer', 'backend', 'frontend', 'dba', 'reviewer', 'recovery', 'auditor'];
 
 function namesIn(dir: string): string[] {
   try { return readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).filter((n) => SLUG_RE.test(n)); } catch { return []; }
@@ -58,7 +38,7 @@ function namesIn(dir: string): string[] {
 /** Every profile a project can use: the shipped ones first (in their usual order), then the others by name (the user's and the project's). */
 /** The profiles an agent can be started with by hand or by the main: the project's own list (or all), only those that exist, without the two roles the console starts itself. */
 export function pickableProfiles(offered: readonly string[] | undefined, existing: readonly string[]): string[] {
-  return (offered ?? existing).filter((n) => existing.includes(n) && n !== 'reviewer' && n !== 'recovery');
+  return (offered ?? existing).filter((n) => existing.includes(n) && n !== 'reviewer' && n !== 'recovery' && n !== 'auditor');
 }
 
 export function listProfileNames(projectRoot: string, userDir: string = join(configDir(), 'profiles')): string[] {
@@ -196,15 +176,16 @@ export function renderMainPrompt(o: { project: string; workLanguage: string; out
 }
 
 /** An agent's system-prompt addition: its profile plus who it is and what the console offers it. */
-export function renderAgentPrompt(o: { profile: Profile; slug: string; project: string; outDir: string; git?: { worktree: string; branch: string }; review?: boolean; recovery?: boolean; projectRoot?: string; docs?: string[]; helpers?: string; /** The agent's checkout has no .gitignore. */ noGitignore?: boolean }): string {
+export function renderAgentPrompt(o: { profile: Profile; slug: string; project: string; outDir: string; git?: { worktree: string; branch: string }; review?: boolean; recovery?: boolean; audit?: boolean; projectRoot?: string; docs?: string[]; helpers?: string; /** The agent's checkout has no .gitignore. */ noGitignore?: boolean }): string {
   const template = readFileSync(join(promptsDir(), 'agent.md'), 'utf8');
-  const rulesFile = o.review ? 'reviewer-git.md' : o.recovery ? 'recovery-git.md' : 'agent-git.md';
+  const readOnlyRole = Boolean(o.review || o.recovery || o.audit); // these sessions read a detached checkout and write no work
+  const rulesFile = o.review ? 'reviewer-git.md' : o.recovery ? 'recovery-git.md' : o.audit ? 'auditor-git.md' : 'agent-git.md';
   const gitRules = o.git ? fill(readFileSync(join(promptsDir(), rulesFile), 'utf8'), { worktree: o.git.worktree, branch: o.git.branch, project: o.project }) : '';
-  const text = fill(template, { slug: o.slug, project: o.project, profile: o.profile.body, git: gitRules, human: o.review || o.recovery ? HUMAN_VIA_QUEUE : humanViaMain(o.project) });
+  const text = fill(template, { slug: o.slug, project: o.project, profile: o.profile.body, git: gitRules, human: readOnlyRole ? HUMAN_VIA_QUEUE : humanViaMain(o.project) });
   // The project's rules reach every session; the documents to update concern only the one that writes the work (not a review or a recovery).
-  const docs = o.docs && o.docs.length > 0 && !o.review && !o.recovery ? `At the last step update: ${o.docs.join(', ')}.` : undefined;
-  const requests = !o.review && !o.recovery ? readFileSync(join(promptsDir(), 'agent-requests.md'), 'utf8').replace(/\r\n/g, '\n').trim() : undefined;
-  const extra = [o.helpers, requests, o.noGitignore && !o.review && !o.recovery ? GITIGNORE_AGENT : undefined, projectText(o.projectRoot, 'rules.md'), docs].filter((x): x is string => x !== undefined);
+  const docs = o.docs && o.docs.length > 0 && !readOnlyRole ? `At the last step update: ${o.docs.join(', ')}.` : undefined;
+  const requests = !readOnlyRole ? readFileSync(join(promptsDir(), 'agent-requests.md'), 'utf8').replace(/\r\n/g, '\n').trim() : undefined;
+  const extra = [o.helpers, requests, o.noGitignore && !readOnlyRole ? GITIGNORE_AGENT : undefined, projectText(o.projectRoot, 'rules.md'), docs].filter((x): x is string => x !== undefined);
   const full = extra.length > 0 ? `${text.trimEnd()}\n\n${extra.join('\n\n')}\n` : text;
   return writePrompt(o.outDir, `agent-${o.slug}.md`, full.replace(/\n{3,}/g, '\n\n'));
 }

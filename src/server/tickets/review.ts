@@ -7,6 +7,11 @@ import type { ReviewNote, Ticket, TicketStore, Verdict } from './store';
 import { runDirect, type TicketTestDeps } from './test-queue';
 import { KeyedQueue } from '../keyed-queue';
 import { noTestCommandDetail } from '../test-commands';
+import { FOREIGN } from './foreign';
+import type { AuditReportResult, AuditService, StartAuditResult } from '../audit/service';
+import type { Metric } from '../audit/metrics';
+import { auditFiles, type AuditVerdict } from '../audit/report';
+import type { AuditLevel } from '../audit/levels';
 
 export const MAX_REWORK_ROUNDS = 2;
 
@@ -32,6 +37,8 @@ export interface ReviewDeps extends TicketTestDeps {
   askUser(q: { text: string; options: string[]; payload: unknown }, onAnswer: (answer: string) => void): void;
   /** The reviewer has given its verdict: end its session and remove its checkout. */
   endReviewer(slug: string): void;
+  /** The anti-slop audit (SPEC 15.7). Without it nothing is measured and nothing gates. */
+  audit?: AuditService;
 }
 
 export interface ReportFacts {
@@ -49,6 +56,8 @@ export interface ReportFacts {
   afterReason?: string;
   /** For a ticket started after another one: the commit its own work starts from (`files` are `base..delivered`, not the other agent's). */
   base?: string;
+  /** The audit of this delivered commit (absent at level `off`): the verdict, the limits that are over (they gate the review) and the readable file. */
+  audit?: { verdict: AuditVerdict; level: AuditLevel; over: Metric[]; file: string };
 }
 
 export type TicketReportResult =
@@ -65,13 +74,17 @@ export type RequestReviewResult =
   /** Started after another agent whose ticket is not merged yet (`spawn_agent after`). */
   | { ok: false; code: AfterRefusal['code']; params: AfterRefusal['params']; detail: string };
 
+export type RequestAuditResult =
+  | Extract<StartAuditResult, { ok: true }>
+  | { ok: false; code: 'level_off' | 'not_delivered' | StartAuditFailure | Extract<TicketReportResult, { ok: false }>['code']; detail?: string };
+type StartAuditFailure = Extract<StartAuditResult, { ok: false }>['code'];
+
 export type VerdictResult =
   | { ok: true; ticket: string; outcome: 'approved' }
   | { ok: true; ticket: string; outcome: 'sent_back'; round: number }
   | { ok: true; ticket: string; outcome: 'needs_user' }
   | { ok: false; code: 'not_reviewer' | 'bad_request' | 'notes_required'; detail?: string };
 
-const FOREIGN = [/(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock)$/, /^(dist|build|out|coverage|node_modules|target|\.venv)\//, /\.(log|tmp|class|pyc|swp)$/];
 const REVIEWABLE = ['delivered', 'in_review', 'approved'];
 const MAX_NOTES = 50;
 const MAX_NOTE_TEXT = 2000;
@@ -142,6 +155,9 @@ function normalizeNotes(raw: unknown): ReviewNote[] | undefined {
   return notes;
 }
 
+const describeOver = (over: Metric[]): string => over.map((m) => `${m.id} ${m.value} > ${m.limit}`).join(', ');
+const reopenNotice = (round: number): string =>
+  `The console reopened your checklist with three new steps ("Review fixes (round ${round})", "Validation (round ${round})", "Update documentation (round ${round})"). Close them in order with step_done as before; the console will deliver the branch again.`;
 const noteLines = (notes: ReviewNote[]): string[] => notes.map((n, i) => `${i + 1}. [${n.severity}]${n.where ? ` ${n.where}` : ''} — ${n.text.replace(/\s+/g, ' ')}`);
 
 /**
@@ -180,6 +196,13 @@ export class ReviewService {
     const base = await ownWorkBase(wt.worktree, this.d.project, ticket, sha);
     const files = await changedFiles(wt.worktree, base ?? `project/${this.d.project}`, sha);
     if (!files) return { ok: false, code: 'git_failed', detail: 'could not list the changed files' };
+    // The zero-token audit of this diff (once per sha): the same range as the file list above.
+    // Advice must never stop the report or the review: a failure here (a locked file, a crashing command) leaves the audit out.
+    const audit = await this.d.audit?.measure({ slug, cwd: wt.worktree, base: base ?? `project/${this.d.project}`, sha, files, rerun: o.rerun }).catch(() => undefined);
+    // The model part starts by itself when the user asked for that: once per commit (a running or finished auditor makes this a no-op). Never waited for.
+    if (audit && !audit.modelRan && this.d.audit?.wantsAutoModel()) {
+      void this.d.audit.startModel({ slug, sha, project: this.d.project, base, goal: ticket.goal, reportFile: auditFiles(this.d.root, slug, sha).md, auto: true }).catch(() => undefined);
+    }
     const goal = ticket.goal ?? '';
     const foreignHints = files.map((f) => f.path).filter((p) => FOREIGN.some((re) => re.test(p)) && !goal.toLowerCase().includes(p.slice(p.lastIndexOf('/') + 1).toLowerCase()));
     const docsNote = ticket.steps.length > 0 ? ticket.steps[ticket.steps.length - 1]!.note : undefined;
@@ -197,6 +220,7 @@ export class ReviewService {
         files, testsOk: tests?.ok, ...(inhibited ? { testsInhibited: true as const } : {}), checklistComplete: ticket.steps.length > 0 && ticket.steps.every((s) => s.done),
         docsChanged: files.some((f) => isDocFile(f.path)), foreignHints,
         ...(after ? { after } : {}), ...(ticket.afterReason ? { afterReason: ticket.afterReason } : {}), ...(base !== undefined ? { base } : {}),
+        ...(audit ? { audit: { verdict: audit.verdict, level: audit.level, over: audit.metrics.filter((m) => m.over), file: auditFiles(this.d.root, slug, sha).md } } : {}),
       },
     };
   }
@@ -222,6 +246,14 @@ export class ReviewService {
         const out = this.fail(slug, [note], 'console');
         return out.outcome === 'needs_user' ? { ok: true, status: 'needs_user' } : { ok: true, status: 'sent_back', round: out.round };
       }
+      // The one gate of the audit (SPEC 15.7): a limit over its value keeps the ticket out of review until the user says so.
+      const audit = report.facts.audit;
+      if (audit && audit.over.length > 0 && ticket.auditWaived !== sha) {
+        this.d.tickets.move(slug, 'needs_user');
+        this.askAudit(slug, sha, audit.over, audit.file);
+        this.d.notifyMain(`Audit of ticket "${slug}": split first (${describeOver(audit.over)}). It is not in review: the user decides in the queue. Report: ${audit.file.replace(/\\/g, '/')}.`);
+        return { ok: true, status: 'needs_user' };
+      }
       const reviewer = reviewerSlugFor(slug, this.d.existingSlugs());
       const round = ticket.verdicts.length + 1;
       const sum = report.facts.files.reduce((n, f) => ({ a: n.a + (f.added ?? 0), r: n.r + (f.removed ?? 0) }), { a: 0, r: 0 });
@@ -236,6 +268,39 @@ export class ReviewService {
       return { ok: true, status: 'in_review', reviewer, round };
     });
   }
+
+  /**
+   * Starts the model part of the audit (SPEC 15.7) for a delivered ticket: the console's own measures first (once per commit), then the
+   * read-only auditor. It changes nothing about the ticket: the report is a file and the main gets one line when it is done.
+   */
+  requestAudit(slug: string, o: { model?: string } = {}): Promise<RequestAuditResult> {
+    return this.queue.run(slug, async () => {
+      const ticket = this.d.tickets.get(slug);
+      if (!this.d.audit || !ticket || !ticket.deliveredSha || !REVIEWABLE.includes(ticket.status)) return { ok: false, code: 'not_delivered' } as const;
+      // Only the changed files and the measures are needed: no test run, and no refusal about the author's worktree.
+      const wt = this.d.worktreeOf(slug);
+      if (!wt) return { ok: false, code: 'no_worktree' } as const;
+      const sha = ticket.deliveredSha;
+      const base = await ownWorkBase(wt.worktree, this.d.project, ticket, sha);
+      const files = await changedFiles(wt.worktree, base ?? `project/${this.d.project}`, sha);
+      if (!files) return { ok: false, code: 'git_failed', detail: 'could not list the changed files' } as const;
+      const measured = await this.d.audit.measure({ slug, cwd: wt.worktree, base: base ?? `project/${this.d.project}`, sha, files }).catch((e: unknown) => e);
+      if (measured instanceof Error) return { ok: false, code: 'git_failed', detail: measured.message } as const;
+      if (!measured) return { ok: false, code: 'level_off' } as const;
+      return this.d.audit.startModel({ slug, sha, project: this.d.project, base, goal: ticket.goal, reportFile: auditFiles(this.d.root, slug, sha).md, model: o.model });
+    });
+  }
+
+  /** The verdict of the ticket's latest audit, for the state (undefined until one has been made). */
+  auditSummary(slug: string): ReturnType<AuditService['summary']> { return this.d.audit?.summary(slug); }
+
+  /** The auditor's one report. */
+  auditReport(auditor: string, body: unknown): Promise<AuditReportResult> {
+    return this.d.audit ? this.d.audit.report(auditor, body) : Promise.resolve({ ok: false, code: 'not_auditor' });
+  }
+
+  /** The auditor's process ended without a report: the main is told, nothing else changes. True when it was one of ours. */
+  abandonAudit(auditor: string): boolean { return this.d.audit?.abandon(auditor) ?? false; }
 
   /** The reviewer's process ended without a verdict: the ticket is delivered again and the main is told. True when something changed. */
   abandonReview(reviewer: string): boolean {
@@ -311,8 +376,42 @@ export class ReviewService {
       `Message from the main about your ticket "${slug}": the review of your delivered work found problems (${failed ? `failed review ${failed} of ${MAX_REWORK_ROUNDS}` : `rework round ${round}`}). Fix them; do not argue.`,
       'Notes:',
       ...noteLines(notes),
-      `The console reopened your checklist with three new steps ("Review fixes (round ${round})", "Validation (round ${round})", "Update documentation (round ${round})"). Close them in order with step_done as before; the console will deliver the branch again.`,
+      reopenNotice(round),
     ].join('\n');
+  }
+
+  /** The audit found a limit over: the user decides whether it is reviewed as it is, goes back to its author to be split, or waits. */
+  private askAudit(slug: string, sha: string, over: Metric[], file: string): void {
+    this.d.askUser(
+      {
+        text: `Ticket "${slug}" is over its audit limits: ${describeOver(over)}`,
+        options: ['review_anyway', 'send_back', 'leave'],
+        payload: { ticket: slug, reason: 'audit_limits', over, report: file.replace(/\\/g, '/') },
+      },
+      (answer) => this.userDecidedAudit(slug, sha, over, answer),
+    );
+  }
+
+  private userDecidedAudit(slug: string, sha: string, over: Metric[], answer: string): void {
+    const ticket = this.d.tickets.get(slug);
+    if (!ticket || ticket.status !== 'needs_user') return;
+    if (answer === 'review_anyway') {
+      this.d.tickets.setAuditWaived(slug, sha);
+      this.d.tickets.move(slug, 'delivered');
+      this.d.notifyMain(`The user chose to review ticket "${slug}" as it is, although the audit found a limit over. Next: call request_review for "${slug}".`);
+    } else if (answer === 'send_back') {
+      if (!this.d.authorAlive(slug)) {
+        this.d.notifyMain(`The user wants ticket "${slug}" sent back to be split, but its author is gone. Tell the user.`);
+        return;
+      }
+      const reopened = this.d.tickets.reopen(slug);
+      this.d.notifyAuthor(slug, [
+        `Message from the main about your ticket "${slug}": the console's audit found your delivered work over the project's limits (${describeOver(over)}).`,
+        'Split the change so that each part can be reviewed on its own: what is unrelated or too big for this ticket goes out of it (the main can open another ticket for it).',
+        reopenNotice(reopened.round),
+      ].join('\n'));
+      this.d.notifyMain(`The user sent ticket "${slug}" back to its author to be split (rework ${reopened.round}).`);
+    }
   }
 
   /** A ticket the pipeline cannot move on by itself: the user chooses (SPEC 15.1). The answer acts on the ticket. */

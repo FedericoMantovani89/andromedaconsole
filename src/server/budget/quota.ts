@@ -77,7 +77,7 @@ export interface QuotaDeps {
   tellMain(text: string): void;
   tellAgent(slug: string, text: string): void;
   /** Every live session. `priority`: lower stops first (the caller uses creation order reversed: older = higher number = stopped last). */
-  agents(): { slug: string; role: 'main' | 'agent' | 'reviewer' | 'recovery'; priority: number }[];
+  agents(): { slug: string; role: 'main' | 'agent' | 'reviewer' | 'recovery' | 'auditor'; priority: number }[];
   wipCommit(slug: string, reason: string): Promise<unknown>;
   restrict(slug: string, r: { reason: 'limit' }): void;
   /** Lifts the restrictions of reason `limit` held on a session (a stronger budget one stays; the caller checks the reason). */

@@ -49,6 +49,8 @@ export interface Ticket {
   afterReason?: string;
   /** With `after`: the commit this agent's branch started from (the other agent's tip then). Its own work is `baseSha..deliveredSha`. */
   baseSha?: string;
+  /** The delivered commit the user chose to review although the audit found a limit over (SPEC 15.7); another commit is gated again. */
+  auditWaived?: string;
   /** The central full run on the merged project branch (`CentralRun`): the tip it passed on, or where it turned red and blamed this ticket. */
   central?: CentralMark;
 }
@@ -152,6 +154,12 @@ export class TicketStore {
     return this.save({ ...this.existing(slug), tests });
   }
 
+  /** Records (or, with `undefined`, clears) the commit the user waved through the audit gate. */
+  setAuditWaived(slug: string, sha: string | undefined): Ticket {
+    const { auditWaived: _old, ...rest } = this.existing(slug);
+    return this.save(sha === undefined ? rest : { ...rest, auditWaived: sha });
+  }
+
   setAgentTests(slug: string, agentTests: AgentTests): Ticket {
     return this.save({ ...this.existing(slug), agentTests });
   }
@@ -222,7 +230,7 @@ export class TicketStore {
     const added: Step[] = [`${o.firstStep ?? 'Review fixes'} (round ${round})`, `Validation (round ${round})`, `Update documentation (round ${round})`]
       .map((title, i) => ({ n: first + i, title, done: false }));
     // The agent's claim about its tests belongs to the round it was made in: the next report must not show it as current.
-    const { blockedReason: _gone, agentTests: _claim, ...rest } = t;
+    const { blockedReason: _gone, agentTests: _claim, auditWaived: _waived, ...rest } = t; // a waiver was for the commit that went back
     return this.save({ ...rest, blocked: false, status: 'in_progress', round, steps: [...t.steps, ...added] });
   }
 

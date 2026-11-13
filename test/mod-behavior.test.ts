@@ -64,7 +64,7 @@ it('registers the tools of its role once and starts one inbox poller, even if se
   const f = fake$();
   await find('session.start')(f.$, {}, next);
   await find('session.start')(f.$, {}, next);
-  expect(f.registeredTools).toEqual(['spawn_agent', 'list_agents', 'send_message', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup']);
+  expect(f.registeredTools).toEqual(['spawn_agent', 'list_agents', 'send_message', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'request_audit', 'propose_release', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup']);
   expect(f.ticks).toHaveLength(1);
 });
 it('an agent gets list_agents and the ticket tools, never spawn_agent', async () => {
@@ -779,4 +779,28 @@ it('resume_agent forwards only { names } and returns the console answer as text'
   const out = await find('tool.call', 'mcp__andromeda-mcp__resume_agent')(f.$, { names: ['fix-login', 'add-cart'], extra: 1 });
   expect(out).toEqual({ result: JSON.stringify(answer) });
   expect(bodies).toEqual({ resume_agent: { names: ['fix-login', 'add-cart'] } });
+});
+
+// ---- the anti-slop audit (SPEC 15.7) ----
+it('an auditor gets only list_agents and audit_report; the main gets request_audit', async () => {
+  const { find } = await loadMod();
+  const a = fake$({ env: { CONSOLE_ROLE: 'auditor', CONSOLE_AGENT: 'audit-fix-login' } });
+  await find('session.start')(a.$, {}, next);
+  expect(a.registeredTools).toEqual(['list_agents', 'audit_report']);
+  const again = await loadMod(); // the mod registers its tools once per process: the main is another process
+  const m = fake$();
+  await again.find('session.start')(m.$, {}, next);
+  expect(m.registeredTools).toContain('request_audit');
+});
+it('the audit tools send only their own fields', async () => {
+  const { find } = await loadMod();
+  const bodies: Record<string, unknown> = {};
+  const answer = { fetch: (url: string, init: { body?: string }) => { if (url.includes('/v1/tools/')) bodies[url.split('/').pop()!] = JSON.parse(init.body ?? '{}'); return { ok: true, text: '{"status":"ok"}' }; } };
+  const main = fake$(answer);
+  await find('session.start')(main.$, {}, next);
+  await find('tool.call', 'mcp__andromeda-mcp__request_audit')(main.$, { name: 'fix-login', model: 'sonnet', extra: 1 });
+  const auditor = fake$({ ...answer, env: { CONSOLE_ROLE: 'auditor', CONSOLE_AGENT: 'audit-fix-login' } });
+  await find('session.start')(auditor.$, {}, next);
+  await find('tool.call', 'mcp__andromeda-mcp__audit_report')(auditor.$, { notes: [{ severity: 'high', where: 'a.ts:1', problem: 'p', fix: 'f', extra: 1 }], extra: 1 });
+  expect(bodies).toEqual({ request_audit: { name: 'fix-login', model: 'sonnet' }, audit_report: { notes: [{ severity: 'high', where: 'a.ts:1', problem: 'p', fix: 'f', extra: 1 }] } });
 });

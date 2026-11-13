@@ -11,6 +11,8 @@ export interface SpawnRequest {
   review?: { ticket: string; sha: string };
   /** A recovery of a stopped ticket: a detached checkout of its WIP commit, read-only (SPEC 16.5). */
   recovery?: { ticket: string; sha: string };
+  /** An auditor of a delivered ticket (SPEC 15.7): a detached, read-only checkout of the delivered commit, like a reviewer's. */
+  audit?: { ticket: string; sha: string };
   /** A replacement agent: its worktree checks out this EXISTING branch (the stopped agent's) instead of a new one (SPEC 16.5). */
   resumeBranch?: string;
   /**

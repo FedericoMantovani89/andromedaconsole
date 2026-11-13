@@ -1,6 +1,6 @@
 import type { Activity, ModEvent } from '../../shared/activity';
 
-export type Role = 'main' | 'agent' | 'reviewer' | 'recovery';
+export type Role = 'main' | 'agent' | 'reviewer' | 'recovery' | 'auditor';
 
 /** An agent's own worktree and branch (Phase 3) and the repository they belong to (absolute path; absent: the project root). */
 export interface AgentGit { worktree: string; branch: string; repo?: string }

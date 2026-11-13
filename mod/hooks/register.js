@@ -115,9 +115,10 @@ function startInboxPoll(/** @type {Engine} */ $) {
 
 /** @type {Record<string, string[]>} */
 const TOOLS_BY_ROLE = {
-  main: ['spawn_agent', 'list_agents', 'send_message', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup'],
+  main: ['spawn_agent', 'list_agents', 'send_message', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'request_audit', 'propose_release', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup'],
   agent: ['list_agents', 'send_message', 'checklist_set', 'step_done', 'report_blocked'],
   reviewer: ['list_agents', 'review_verdict'],
+  auditor: ['list_agents', 'audit_report'],
   recovery: ['list_agents', 'recovery_report'],
 };
 
@@ -258,6 +259,20 @@ const TOOL_SPECS = {
         notes: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string' }, where: { type: 'string' }, text: { type: 'string' } }, required: ['text'] } },
       },
       required: ['pass'],
+    },
+  },
+  request_audit: {
+    description: 'Start the model part of the anti-slop audit of a delivered ticket: a read-only auditor looks at the diff for duplicated code, over-engineering, unrelated changes and deviations from the style profile of the project (never at correctness). Returns { status: "ok", auditor } or { status: "refused", code }. The report is a file; the console tells you its verdict when it is done. Nothing is changed or sent back to the author by it.',
+    inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'The ticket (agent) name' }, model: { type: 'string', description: 'Optional model for the auditor' } }, required: ['name'] },
+  },
+  audit_report: {
+    description: 'Your one report on the ticket you were asked to audit: notes, each with severity high/medium/low, where as file:line, problem (what is wrong, in one or two sentences) and fix (what to do instead). Never about correctness. Call it exactly once, then stop.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        notes: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string' }, where: { type: 'string' }, problem: { type: 'string' }, fix: { type: 'string' } }, required: ['problem'] } },
+      },
+      required: ['notes'],
     },
   },
   start_recovery: {
@@ -457,6 +472,8 @@ function toolBody(/** @type {string} */ name, /** @type {Ev} */ e) {
   if (name === 'merge_ticket') return { name: e.name };
   if (name === 'send_back_ticket') return { name: e.name, note: e.note };
   if (name === 'review_verdict') return { pass: e.pass, notes: e.notes };
+  if (name === 'request_audit') return { name: e.name, model: e.model };
+  if (name === 'audit_report') return { notes: e.notes };
   if (name === 'start_recovery') return { name: e.name };
   if (name === 'recovery_report') return { verified_steps: e.verified_steps, diagnosis: e.diagnosis, remedy: e.remedy, notes: e.notes };
   if (name === 'resume_agent' || name === 'archive_agent') return { names: e.names };
@@ -633,6 +650,8 @@ export const register = (on) => {
   on('tool.call', { tool: 'mcp__andromeda-mcp__merge_ticket' }, ($, e) => onConsoleTool($, 'merge_ticket', e));
   on('tool.call', { tool: 'mcp__andromeda-mcp__propose_release' }, ($, e) => onConsoleTool($, 'propose_release', e));
   on('tool.call', { tool: 'mcp__andromeda-mcp__review_verdict' }, ($, e) => onConsoleTool($, 'review_verdict', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__request_audit' }, ($, e) => onConsoleTool($, 'request_audit', e));
+  on('tool.call', { tool: 'mcp__andromeda-mcp__audit_report' }, ($, e) => onConsoleTool($, 'audit_report', e));
   on('tool.call', { tool: 'Bash' }, ($, e, next) => guardCall($, 'Bash', e, next));
   on('tool.call', { tool: 'PowerShell' }, ($, e, next) => guardCall($, 'PowerShell', e, next));
   on('tool.call', { tool: 'Write' }, ($, e, next) => guardCall($, 'Write', e, next));

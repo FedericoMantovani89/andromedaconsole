@@ -26,15 +26,16 @@ export const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/;
 /** The console's own tools an agent may call without a permission prompt. */
 export const AGENT_TOOLS = ['list_agents', 'send_message', 'checklist_set', 'step_done', 'report_blocked'].map((t) => `mcp__andromeda-mcp__${t}`);
 /** What the main may call without a permission prompt: every tool the mod registers for the main, plus `ask_user` (native question of the main). */
-export const MAIN_TOOLS = ['spawn_agent', 'list_agents', 'ask_user', 'send_message', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'propose_release'].map((t) => `mcp__andromeda-mcp__${t}`);
+export const MAIN_TOOLS = ['spawn_agent', 'list_agents', 'ask_user', 'send_message', 'start_recovery', 'resume_agent', 'archive_agent', 'worktree_cleanup', 'ticket_report', 'request_review', 'send_back_ticket', 'merge_ticket', 'request_audit', 'propose_release'].map((t) => `mcp__andromeda-mcp__${t}`);
 export const REVIEWER_TOOLS = ['list_agents', 'review_verdict'].map((t) => `mcp__andromeda-mcp__${t}`);
 export const RECOVERY_TOOLS = ['list_agents', 'recovery_report'].map((t) => `mcp__andromeda-mcp__${t}`);
+export const AUDITOR_TOOLS = ['list_agents', 'audit_report'].map((t) => `mcp__andromeda-mcp__${t}`);
 
-/** The session's role: a reviewer and a recovery read a detached checkout; every other launched session is an agent. */
-const roleOf = (r: SpawnRequest): 'agent' | 'reviewer' | 'recovery' => (r.review ? 'reviewer' : r.recovery ? 'recovery' : 'agent');
+/** The session's role: a reviewer, a recovery and an auditor read a detached checkout; every other launched session is an agent. */
+const roleOf = (r: SpawnRequest): 'agent' | 'reviewer' | 'recovery' | 'auditor' => (r.review ? 'reviewer' : r.recovery ? 'recovery' : r.audit ? 'auditor' : 'agent');
 /** A detached, read-only checkout of one commit (a reviewer or a recovery): no branch of its own. */
 const detachedOf = (r: SpawnRequest): { sha: string; prefix: string } | undefined =>
-  r.review ? { sha: r.review.sha, prefix: 'review' } : r.recovery ? { sha: r.recovery.sha, prefix: 'recovery' } : undefined;
+  r.review ? { sha: r.review.sha, prefix: 'review' } : r.recovery ? { sha: r.recovery.sha, prefix: 'recovery' } : r.audit ? { sha: r.audit.sha, prefix: 'audit' } : undefined;
 
 const refuse = (httpStatus: number, code: string, params?: Record<string, string | number>): SpawnOutcome =>
   ({ ok: false, httpStatus, code, params });
@@ -69,7 +70,7 @@ export async function spawnAgent(ctx: Context, r: SpawnRequest): Promise<SpawnOu
   if (!profile) return refuse(422, 'profile.invalid');
   // A project may offer only some profiles (its template); the console's own reviewer, recovery and replacement spawns are exempt.
   const offered = ctx.store.fields().profiles;
-  if (offered && !r.review && !r.recovery && !r.resumeBranch && !offered.includes(r.profile)) return refuse(422, 'profile.invalid');
+  if (offered && !r.review && !r.recovery && !r.audit && !r.resumeBranch && !offered.includes(r.profile)) return refuse(422, 'profile.invalid');
 
   const request: SpawnRequest = { ...r, slug: v.slug, model: r.model === '' ? undefined : r.model };
   if (request.model !== undefined && !MODEL_RE.test(request.model)) return refuse(422, 'model.invalid');
@@ -77,6 +78,8 @@ export async function spawnAgent(ctx: Context, r: SpawnRequest): Promise<SpawnOu
   if (r.profile === 'reviewer' && !r.review) return refuse(422, 'review.useRequestReview');
   // A recovery exists only for a stopped ticket: start_recovery (or the user's answer to a stop) starts it, on the WIP commit.
   if (r.profile === 'recovery' && !r.recovery) return refuse(422, 'recovery.useRecoveryTool');
+  // An auditor exists only for a delivered ticket: request_audit starts it, with the checkout of that commit.
+  if (r.profile === 'auditor' && !r.audit) return refuse(422, 'audit.useRequestAudit');
   if (ctx.git.worktrees) {
     // Which repository: the project folder when it is one, else the sub-folder named in the request. Found now, before the name is
     // reserved, so the user sees the real reason (SPEC 9.2); the worktree itself is made at start.
@@ -214,8 +217,8 @@ function startProcess(ctx: Context, r: SpawnRequest, profile: Profile, cwd: stri
     url: `http://127.0.0.1:${ctx.getPort()}`, token: ctx.tokens.issue(r.slug), bypass, baseEnv: { ...process.env, ...hookEnv },
     pluginDir: ctx.modDir, displayName: `${r.slug} ${ctx.projectName} AndromedaConsole`,
     ...(ctx.modDir ? { settingsFile: writeSessionSettings(ctx.projectRoot) } : {}),
-    allowedTools: ctx.modDir ? (r.review ? REVIEWER_TOOLS : r.recovery ? RECOVERY_TOOLS : AGENT_TOOLS) : undefined,
-    appendPromptFile: renderAgentPrompt({ profile, slug: r.slug, project: ctx.projectName, outDir: ctx.promptsDir, git, review: Boolean(r.review), recovery: Boolean(r.recovery), projectRoot: ctx.projectRoot, docs: projectFields.docs, helpers: helperToolsText(ctx.getPrereq()), noGitignore: !hasGitignore(cwd) }),
+    allowedTools: ctx.modDir ? (r.review ? REVIEWER_TOOLS : r.recovery ? RECOVERY_TOOLS : r.audit ? AUDITOR_TOOLS : AGENT_TOOLS) : undefined,
+    appendPromptFile: renderAgentPrompt({ profile, slug: r.slug, project: ctx.projectName, outDir: ctx.promptsDir, git, review: Boolean(r.review), recovery: Boolean(r.recovery), audit: Boolean(r.audit), projectRoot: ctx.projectRoot, docs: projectFields.docs, helpers: helperToolsText(ctx.getPrereq()), noGitignore: !hasGitignore(cwd) }),
     // request > profile > project (Phase 6D) > the global choice in Options (Phase 6E) > Claude Code's own default (no --model)
     model: r.model ?? profile.model ?? projectFields.model ?? ctx.models.agentModel(),
     ...(r.resume ? { resumeId: r.resume.sessionId } : {}),
@@ -277,6 +280,7 @@ export function failQueuedStart(ctx: Context, r: SpawnRequest): void {
   ctx.tokens.revoke(r.slug);
   ctx.registry.onProcessExit(r.slug);
   if (r.review) ctx.review.abandonReview(r.slug); // the ticket must not stay in review for ever
+  if (r.audit) ctx.review.abandonAudit(r.slug); // the main is told the auditor never started
   if (r.recovery) ctx.recovery.abandon(r.slug); // nor in recovery
   if (r.resume && r.resume.reason && r.resume.reason !== 'limit') {
     // A woken agent has no limit to blame: its ticket stays as it is and the main decides.

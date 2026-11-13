@@ -31,8 +31,8 @@ export class AgentPersister {
     if (this.closed) return;
     const a = this.d.registry.get(slug);
     if (!a) return;
-    // Reviewers and recoveries are never restored: nothing to remember of them.
-    if (a.role === 'reviewer' || a.role === 'recovery') return;
+    // Reviewers, recoveries and auditors are never restored: nothing to remember of them.
+    if (a.role === 'reviewer' || a.role === 'recovery' || a.role === 'auditor') return;
     if (slug === this.d.mainSlug) { this.saveMain(); return; }
     const now = (this.d.now ?? Date.now)();
     const wait = (this.d.minIntervalMs ?? 1000) - (now - (this.lastWrite.get(slug) ?? Number.NEGATIVE_INFINITY));

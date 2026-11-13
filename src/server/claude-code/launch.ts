@@ -1,5 +1,5 @@
 export interface LaunchOptions {
-  command: string[]; role: 'main' | 'agent' | 'reviewer' | 'recovery'; slug: string; project: string;
+  command: string[]; role: 'main' | 'agent' | 'reviewer' | 'recovery' | 'auditor'; slug: string; project: string;
   /** For a launched session this is its own session token (never the UI token). */
   url: string; token: string; bypass: boolean; baseEnv: NodeJS.ProcessEnv; platform?: NodeJS.Platform;
   /** The console mod to load (--plugin-dir). Omitted: no mod (fake agents in tests, or mod disabled). */

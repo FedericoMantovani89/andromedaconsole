@@ -189,6 +189,7 @@ export function registerBudget(c: ProjectContainer): void {
         await k.get('finishAgent')(slug, { stopped: role === 'agent' });
         if (role === 'reviewer') k.get('review').abandonReview(slug);
         else if (role === 'recovery') k.get('recovery').abandon(slug);
+        else if (role === 'auditor') k.get('review').abandonAudit(slug);
       },
       // A step back to 'none' must start the queue by itself: the scheduler only looks again when told.
       applyLimits: (s) => { quotaStepRef.value = s; k.get('scheduler').release(); shared.broadcastAll(); },

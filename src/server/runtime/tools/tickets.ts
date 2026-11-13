@@ -16,7 +16,7 @@ const TOOL_WAIT_MS = 15_000;
 const BLOCKED_REASON_MAX = 500;
 
 /** The console tools of a ticket's life: steps, review, recovery, release and merge. */
-export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checklist_set' | 'step_done' | 'report_blocked' | 'ticket_report' | 'request_review' | 'send_back_ticket' | 'review_verdict' | 'propose_release' | 'release_answer' | 'start_recovery' | 'recovery_report' | 'merge_ticket'> {
+export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checklist_set' | 'step_done' | 'report_blocked' | 'ticket_report' | 'request_review' | 'send_back_ticket' | 'review_verdict' | 'request_audit' | 'audit_report' | 'propose_release' | 'release_answer' | 'start_recovery' | 'recovery_report' | 'merge_ticket'> {
   const restrictions = k.get('restrictions');
   const steps = k.get('steps');
   const review = k.get('review');
@@ -83,6 +83,18 @@ export function ticketTools(k: ProjectContainer): Pick<Context['tools'], 'checkl
     review_verdict: async (slug, body) => {
       const r = await review.reviewVerdict(slug, body);
       if (!r.ok) return r.code === 'bad_request' ? badRequest(r.detail ?? 'the verdict is malformed') : { status: 'refused', code: r.code };
+      const { ok: _ok, ...rest } = r;
+      return { status: 'ok', ...rest };
+    },
+    request_audit: async (_slug, body) => {
+      const b = (typeof body === 'object' && body !== null ? body : {}) as { name?: unknown; model?: unknown };
+      if (typeof b.name !== 'string' || b.name === '') return badRequest('name is required');
+      const r = await review.requestAudit(b.name, { model: typeof b.model === 'string' && b.model !== '' ? b.model : undefined });
+      return r.ok ? { status: 'ok', auditor: r.auditor } : { status: 'refused', code: r.code, ...(r.detail ? { detail: r.detail } : {}) };
+    },
+    audit_report: async (slug, body) => {
+      const r = await review.auditReport(slug, body);
+      if (!r.ok) return r.code === 'bad_request' ? badRequest(r.detail ?? 'the report is malformed') : { status: 'refused', code: r.code };
       const { ok: _ok, ...rest } = r;
       return { status: 'ok', ...rest };
     },

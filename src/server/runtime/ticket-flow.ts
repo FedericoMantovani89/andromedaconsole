@@ -1,6 +1,8 @@
 import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnAgent } from '../agents/spawn';
+import { AuditService } from '../audit/service';
+import { effectiveAudit } from '../audit/settings';
 import { budgetAnswerHandler } from '../budget/answers';
 import { commonDir, removeWorktree } from '../git/worktree';
 import { KeyedQueue } from '../keyed-queue';
@@ -23,7 +25,7 @@ const CENTRAL_SETTLE_MS = 120_000;
 export function registerTicketFlow(c: ProjectContainer): void {
   c.provide('ticketQueue', () => new KeyedQueue()); // one queue per ticket, shared by every service that changes it
   c.provide('review', (k) => {
-    const { o, runtime } = k.get('env');
+    const { o, runtime, config } = k.get('env');
     const ticketQueue = k.get('ticketQueue');
     const tickets = k.get('tickets');
     const projectName = k.get('projectName');
@@ -57,6 +59,23 @@ export function registerTicketFlow(c: ProjectContainer): void {
       notifyAuthor: (slug, text) => { inbox.push(slug, text); },
       askUser: (q, onAnswer) => { questions.ask({ from: CONSOLE_FROM, text: q.text, kind: 'decision', options: q.options, payload: q.payload }, onAnswer); },
       endReviewer: (slug) => endReadOnlySession(slug),
+      // The anti-slop audit (SPEC 15.7): the global setting and the project's own override are read at every use, so a change applies at once.
+      audit: new AuditService({
+        root: o.projectRoot,
+        settings: () => effectiveAudit(config.audit, store.fields()),
+        language: reportLanguage,
+        testTimeoutMs: () => runtime.git.testTimeoutMinutes * 60_000,
+        runCommand: testRunnerAt('ticket'),
+        lintCommand: () => store.fields().lintCommand,
+        // The model part: a read-only auditor session through the normal spawn flow, like the reviewer.
+        spawnAuditor: async (r) => {
+          const out = await spawnAgent(k.get('ctx'), { slug: r.slug, profile: 'auditor', goal: r.goal, model: r.model, source: 'main', audit: { ticket: r.ticket, sha: r.sha }, ...repoOfTicket(r.ticket) });
+          return spawnResult(out);
+        },
+        endAuditor: (slug) => endReadOnlySession(slug),
+        notifyMain: (text) => { inbox.push(projectName, text); },
+        existingSlugs: () => [projectName, ...store.listAgents().map((a) => a.slug)],
+      }),
     });
   });
   // The full run on the merged project branch: after the merges settle, one run for the whole batch, through the queue.
