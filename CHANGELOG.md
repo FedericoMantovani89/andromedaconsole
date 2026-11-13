@@ -8,6 +8,13 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+- Added an anti-slop audit of every delivered ticket (read-only, advisory, never fixes anything): the console measures lines changed, files touched, file length, runs of comment lines and the share of comments (zero tokens), runs the lint and format commands of the style profile on the changed files, and writes `audit-<sha>.json/.md` next to the ticket report with a verdict (ready, needs changes, split first).
+- A limit of the audit that is over keeps the ticket out of review: it goes to the queue with *Review it anyway*, *Send back to the author* or *Leave it for now*; the answer *review anyway* holds for that commit only.
+- Added the read-only `auditor` session (visible in the agents list) for the model part of the audit: duplicates, over-engineering, unrelated changes and deviations from your conventions, started by the main's new `request_audit` tool, by the verdict chip's dialog, or by itself at level *Full* with *Start the model part by itself*.
+- Added style profiles, one `.md` file each (limits, commands and your conventions in your own language), per user or per project, with *Options → Audit* to edit, duplicate, export and import them; the audit level, the automatic model part and the active profile can be set everywhere and per project.
+- A ticket card now shows the audit verdict chip; a click opens the measures, the commands' result and the notes as `path:line — problem -> fix`.
+- Profile files saved with a byte-order mark and Windows line ends are now read correctly.
+
 ## [0.0.18] - 2026-11-10
 
 - Added a trash button on an agent's panel that closes a stuck agent and archives it by force (state finished, ticket untouched); it shows only where "Archive" is not offered.
