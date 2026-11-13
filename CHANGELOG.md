@@ -8,6 +8,8 @@ change that introduces the behaviour.
 
 ## [Unreleased]
 
+## [0.0.19] - 2026-11-13
+
 - Added an anti-slop audit of every delivered ticket (read-only, advisory, never fixes anything): the console measures lines changed, files touched, file length, runs of comment lines and the share of comments (zero tokens), runs the lint and format commands of the style profile on the changed files, and writes `audit-<sha>.json/.md` next to the ticket report with a verdict (ready, needs changes, split first).
 - A limit of the audit that is over keeps the ticket out of review: it goes to the queue with *Review it anyway*, *Send back to the author* or *Leave it for now*; the answer *review anyway* holds for that commit only.
 - Added the read-only `auditor` session (visible in the agents list) for the model part of the audit: duplicates, over-engineering, unrelated changes and deviations from your conventions, started by the main's new `request_audit` tool, by the verdict chip's dialog, or by itself at level *Full* with *Start the model part by itself*.
@@ -558,7 +560,8 @@ Documentation only, kept under `docs/` (not versioned): `REPORT-VERIFICHE.md` wi
 of context compaction (S0), notes on the reference projects, and a probe mod. No project B was needed for V1-V8. See
 `docs/SPEC.md` section 3.5 for the places where reality differed from the specification.
 
-[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.18...HEAD
+[Unreleased]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.19...HEAD
+[0.0.19]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.18...v0.0.19
 [0.0.18]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.17...v0.0.18
 [0.0.17]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/FedericoMantovani89/andromedaconsole/compare/v0.0.15...v0.0.16
