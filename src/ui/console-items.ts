@@ -1,3 +1,4 @@
+import { formatMetric } from '../shared/audit-format';
 import type { QueueItem } from '../shared/protocol';
 import { bindText, k, t } from './i18n-client';
 import { renderInto } from './markdown-lazy';
@@ -185,7 +186,7 @@ export function createDecisionEntry(item: QueueItem, send: (answer: string) => v
     list.className = 'queue-detail';
     for (const o of over) {
       const li = document.createElement('li');
-      li.textContent = `${t(`audit.metric.${str(o.id)}`)}: ${num(o.value)} / ${num(o.limit)}`;
+      li.textContent = `${t(`audit.metric.${str(o.id)}`)}: ${formatMetric(str(o.id), num(o.value))} / ${formatMetric(str(o.id), num(o.limit))}`;
       list.append(li);
     }
     el.append(details(k('queue.decision.audit.limits'), {}, list));

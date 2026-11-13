@@ -1,5 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { formatMetric } from '../../shared/audit-format';
 import type { Translate } from '../../shared/i18n';
 import { reportPath } from '../tickets/report';
 import type { LayerTwoResult } from './commands';
@@ -52,8 +53,8 @@ const plainWhere = (s: string): string => oneLine(s).replace(/`/g, '').slice(0, 
 
 function metricLine(m: Metric, t: Translate): string {
   const na = t('common.notAvailable');
-  const value = m.value === 'n/a' ? na : String(m.value);
-  const limit = m.limit === 0 ? t('audit.limit.off') : String(m.limit);
+  const value = m.value === 'n/a' ? na : formatMetric(m.id, m.value);
+  const limit = m.limit === 0 ? t('audit.limit.off') : formatMetric(m.id, m.limit);
   const where = m.where ? ` (${plainWhere(m.where)})` : '';
   return `- ${t(`audit.metric.${m.id}`)}: ${value} / ${limit}${m.over ? ` — ${t('audit.over')}` : ''}${where}`;
 }

@@ -7,6 +7,7 @@ import type { ReviewNote, Ticket, TicketStore, Verdict } from './store';
 import { runDirect, type TicketTestDeps } from './test-queue';
 import { KeyedQueue } from '../keyed-queue';
 import { noTestCommandDetail } from '../test-commands';
+import { formatMetric } from '../../shared/audit-format';
 import { FOREIGN } from './foreign';
 import type { AuditReportResult, AuditService, StartAuditResult } from '../audit/service';
 import type { Metric } from '../audit/metrics';
@@ -155,7 +156,7 @@ function normalizeNotes(raw: unknown): ReviewNote[] | undefined {
   return notes;
 }
 
-const describeOver = (over: Metric[]): string => over.map((m) => `${m.id} ${m.value} > ${m.limit}`).join(', ');
+const describeOver = (over: Metric[]): string => over.map((m) => `${m.id} ${typeof m.value === 'number' ? formatMetric(m.id, m.value) : m.value} > ${formatMetric(m.id, m.limit)}`).join(', ');
 const reopenNotice = (round: number): string =>
   `The console reopened your checklist with three new steps ("Review fixes (round ${round})", "Validation (round ${round})", "Update documentation (round ${round})"). Close them in order with step_done as before; the console will deliver the branch again.`;
 const noteLines = (notes: ReviewNote[]): string[] => notes.map((n, i) => `${i + 1}. [${n.severity}]${n.where ? ` ${n.where}` : ''} — ${n.text.replace(/\s+/g, ' ')}`);

@@ -1,3 +1,4 @@
+import { formatMetric } from '../shared/audit-format';
 import type { ApiError, SessionInfo } from '../shared/protocol';
 import { api } from './api';
 import { el, showDialog } from './dom';
@@ -48,8 +49,8 @@ const line = (text: string, className?: string): HTMLElement => {
 };
 
 function metricLine(m: Metric): HTMLElement {
-  const value = m.value === 'n/a' ? t('common.notAvailable') : String(m.value);
-  const limit = m.limit === 0 ? t('audit.limit.off') : String(m.limit);
+  const value = m.value === 'n/a' ? t('common.notAvailable') : formatMetric(m.id, m.value);
+  const limit = m.limit === 0 ? t('audit.limit.off') : formatMetric(m.id, m.limit);
   const where = m.where ? ` (${m.where})` : '';
   return line(`${t(`audit.metric.${m.id}`)}: ${value} / ${limit}${m.over ? ` — ${t('audit.over')}` : ''}${where}`, m.over ? 'audit-over' : undefined);
 }

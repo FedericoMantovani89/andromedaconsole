@@ -91,6 +91,13 @@ describe('the readable report', () => {
     expect(it).toContain('src/a.ts:41 — duplicates format() in src/b.ts:7 -> call it'); // the model's words are not translated
   });
 
+  it('writes the share of comments as a percentage, not as a long fraction', () => {
+    const r = report({ verdict: 'split_first', metrics: [{ id: 'comment_ratio', value: 1 / 6, limit: 0.15, over: true }] });
+    const md = readFileSync(writeAudit(dir, 'add-thing', r, tr('en'), 'en').md, 'utf8');
+    expect(md).toContain('16.7% / 15%');
+    expect(md).not.toContain('0.1666');
+  });
+
   it('says n/a for a missing value and "not run" for a layer that did not run, never ok', () => {
     const en = readFileSync(writeAudit(dir, 'add-thing', full, tr('en'), 'en').md, 'utf8');
     expect(en).toMatch(/n\/a/);

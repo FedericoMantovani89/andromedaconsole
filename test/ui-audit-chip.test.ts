@@ -22,7 +22,7 @@ beforeEach(() => {
   postStatus = 200;
   audit = {
     verdict: 'split_first', level: 'metrics', profile: 'default', modelRan: true, notRun: [],
-    metrics: [{ id: 'diff_lines', value: 412, limit: 250, over: true, where: 'src/a.ts' }, { id: 'file_lines', value: 'n/a', limit: 0, over: false }],
+    metrics: [{ id: 'diff_lines', value: 412, limit: 250, over: true, where: 'src/a.ts' }, { id: 'file_lines', value: 'n/a', limit: 0, over: false }, { id: 'comment_ratio', value: 1 / 6, limit: 0.15, over: true }],
     layerTwo: [{ id: 'lint', ran: false, reason: 'no_command' }],
     notes: [{ source: 'model', severity: 'high', where: 'src/a.ts:41', problem: '<b>duplicates</b> format()', fix: 'call it' }],
   };
@@ -63,6 +63,7 @@ describe('the audit chip', () => {
     const dialog = document.querySelector('.audit-dialog')!;
     expect(dialog.textContent).toContain('audit.metric.diff_lines: 412 / 250');
     expect(dialog.textContent).toContain('audit.over');
+    expect(dialog.textContent).toContain('audit.metric.comment_ratio: 16.7% / 15%'); // a share is a percentage, not 0.1666...
     expect(dialog.textContent).toContain('audit.metric.file_lines: common.notAvailable / audit.limit.off'); // a missing value is n/a, never 0
     expect(dialog.textContent).toContain('audit.layer.lint: audit.notRun');
     expect(dialog.textContent).toContain('[high] src/a.ts:41 — <b>duplicates</b> format() -> call it');
@@ -137,7 +138,7 @@ describe('the queue decision of the audit gate', () => {
   const item: QueueItem = {
     id: 'q1', from: 'console', kind: 'decision', text: 'x', createdAt: '2026-11-13T10:00:00Z',
     options: ['review_anyway', 'send_back', 'leave'],
-    payload: { ticket: 'fix', reason: 'audit_limits', over: [{ id: 'diff_lines', value: 412, limit: 250 }] },
+    payload: { ticket: 'fix', reason: 'audit_limits', over: [{ id: 'diff_lines', value: 412, limit: 250 }, { id: 'comment_ratio', value: 1 / 6, limit: 0.15 }] },
   };
 
   it('says why, lists the limits that are over, and offers the three answers in this order with their own icons', () => {
@@ -145,6 +146,7 @@ describe('the queue decision of the audit gate', () => {
     const { el } = createDecisionEntry(item, (a) => sent.push(a));
     expect(el.querySelector('.queue-why')!.getAttribute('data-i18n')).toBe('queue.decision.reason.audit_limits');
     expect(el.textContent).toContain('audit.metric.diff_lines: 412 / 250');
+    expect(el.textContent).toContain('audit.metric.comment_ratio: 16.7% / 15%');
     const buttons = [...el.querySelectorAll<HTMLButtonElement>('button[data-answer]')];
     expect(buttons.map((b) => b.dataset.answer)).toEqual(['review_anyway', 'send_back', 'leave']);
     expect(buttons.map((b) => b.querySelector('svg')!.dataset.icon)).toEqual(['play', 'undo', 'minus']);
