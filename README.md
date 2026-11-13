@@ -30,7 +30,7 @@ One coding agent can handle a task. Several at once create a different job: who 
 ### Why not just open several terminals, or use Claude Code's own features?
 
 - **A terminal does not know about the others.** Here an agent has its own worktree and branch, so two agents cannot overwrite each other, and only the console commits, tests and pushes. With plain terminals that discipline is yours to keep.
-- **Nothing merges on a hope.** A ticket is delivered, its tests are re-run on that exact commit, a read-only reviewer reads the diff, and only then is it merged; reaching your real `main` takes one confirmation from you.
+- **Nothing merges on a hope.** A ticket is delivered, its tests are re-run on that exact commit, an audit measures the diff for slop (too big, mixed, noisy comments, your own style limits), a read-only reviewer reads it, and only then is it merged; reaching your real `main` takes one confirmation from you.
 - **Money and stuck agents are watched.** Token budgets per agent, loop detection and the subscription limit are handled for you, and every question lands in one queue instead of a tab you forgot to look at.
 
 ## What you need
