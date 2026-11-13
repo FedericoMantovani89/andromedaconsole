@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { writeJsonAtomic } from './fs-atomic';
 import { readJsonFile, readJsonState, setAside, type StateReport } from './json-file';
 import { migrateProjectFolder } from './legacy-names';
+import { AUDIT_LEVELS, type AuditLevel } from './audit/levels';
+import { SLUG_RE } from '../shared/slug';
 
 export const TEST_MOMENTS = ['ticket', 'merge', 'release'] as const;
 export type TestMoment = (typeof TEST_MOMENTS)[number];
@@ -27,6 +29,10 @@ export interface ProjectInfo {
   /** Phase 6D: what the console builds and lints with (same rules as `testCommand`). */
   buildCommand?: string;
   lintCommand?: string;
+  /** The audit of delivered tickets (SPEC 15.7): each one, when set, beats the global `audit` setting. */
+  auditLevel?: AuditLevel;
+  auditAutoModel?: boolean;
+  auditProfile?: string;
   /** Profile names offered to the new-agent picker (default: all). */
   profiles?: string[];
   /** Default model of the project's agents (behind the request's and the profile's). */
@@ -43,7 +49,7 @@ export interface ProjectInfo {
 /** What the console remembers of an agent between runs (Phase 6A). Every field after `createdAt` is optional: older files stay valid. */
 export interface AgentRecord {
   slug: string; profile: string; createdAt: string;
-  role?: 'main' | 'agent' | 'reviewer' | 'recovery';
+  role?: 'main' | 'agent' | 'reviewer' | 'recovery' | 'auditor';
   sessionId?: string;
   worktree?: string;
   branch?: string;
@@ -86,7 +92,7 @@ const isStringList = (v: unknown, max: number, maxLen: number): v is string[] =>
 const isIntIn = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 
 /** The optional project fields of Phase 6D that are set through `setFields` (`testCommand` and `squash` have their own setters). */
-export const PROJECT_FIELDS = ['buildCommand', 'lintCommand', 'profiles', 'model', 'agentTokens', 'maxActive', 'docs', 'secretPatterns'] as const;
+export const PROJECT_FIELDS = ['buildCommand', 'lintCommand', 'auditLevel', 'auditAutoModel', 'auditProfile', 'profiles', 'model', 'agentTokens', 'maxActive', 'docs', 'secretPatterns'] as const;
 export type ProjectField = (typeof PROJECT_FIELDS)[number];
 
 /** Allowed whole-number range of the numeric project fields (validation and the error text read it). */
@@ -96,6 +102,9 @@ export const PROJECT_RANGES: Readonly<Record<string, readonly [number, number]>>
 export function isValidProjectField(field: ProjectField, v: unknown, knownProfiles?: readonly string[]): boolean {
   switch (field) {
     case 'buildCommand': case 'lintCommand': return isValidTestCommand(v);
+    case 'auditLevel': return typeof v === 'string' && (AUDIT_LEVELS as readonly string[]).includes(v);
+    case 'auditAutoModel': return typeof v === 'boolean';
+    case 'auditProfile': return typeof v === 'string' && SLUG_RE.test(v);
     case 'profiles': return isStringList(v, 64, 40) && (knownProfiles === undefined || v.every((p) => knownProfiles.includes(p)));
     case 'model': return typeof v === 'string' && PROJECT_MODEL_RE.test(v);
     case 'agentTokens': return isIntIn(v, ...PROJECT_RANGES.agentTokens!);

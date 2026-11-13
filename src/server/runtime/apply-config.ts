@@ -27,6 +27,7 @@ export function applyConfig(k: ProjectContainer): Context['applyConfig'] {
     if (isPlain(applied.git)) {
       for (const key of Object.keys(applied.git) as (keyof Config['git'])[]) Object.assign(runtime.git, { [key]: next.git[key] });
     }
+    if (isPlain(applied.audit)) Object.assign(config.audit, next.audit); // read at every use (ticket-flow's AuditService)
     if (isPlain(applied.models)) Object.assign(config.models, next.models);
     if (isPlain(applied.plugins)) Object.assign(config.plugins, next.plugins);
   };

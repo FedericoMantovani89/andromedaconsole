@@ -6,6 +6,8 @@ import { migrateConfigFolder } from './legacy-names';
 import { DEFAULT_SECRET_PATTERNS } from './git/secrets';
 import { DEFAULT_NOTIFICATIONS, NOTIFY_TYPES, type NotificationsConfig } from '../shared/notify';
 import { isObj } from '../shared/guards';
+import { SLUG_RE } from '../shared/slug';
+import { AUDIT_LEVELS, type AuditLevel } from './audit/levels';
 
 /** "auto" or a language code that has a bundle (checked against the bundles by the server). */
 export type Language = string;
@@ -19,6 +21,8 @@ export interface Config {
   git: { worktrees: boolean; secretPatterns: string[]; testTimeoutMinutes: number; staleWorktreeDays: number; staleCheck: boolean };
   /** `shadow` allows everything but logs what `enforce` would have denied (SPEC 14). */
   guard: { mode: 'enforce' | 'shadow' };
+  /** The anti-slop audit of delivered tickets (SPEC 15.7): how much of it runs, whether the model part starts by itself, and the style profile. A project can override each. */
+  audit: { level: AuditLevel; autoModel: boolean; profile: string };
   /** Budget, loop and quota thresholds (SPEC 16, 17, 18). Applied to sessions launched afterwards; the quota steps are read on every event. */
   budget: BudgetConfig;
   /** Toasts for everything that needs the user (SPEC 20); read on every event, so a change applies at once. */
@@ -58,6 +62,7 @@ export const DEFAULT_CONFIG: Config = {
   mod: { enabled: true },
   git: { worktrees: true, secretPatterns: DEFAULT_SECRET_PATTERNS, testTimeoutMinutes: 15, staleWorktreeDays: 10, staleCheck: true },
   guard: { mode: 'enforce' },
+  audit: { level: 'metrics', autoModel: false, profile: 'default' },
   budget: {
     agentTokens: 400000, alertPercent: 80, limitPercent: 100, stopPercent: 110, graceMinutes: 5,
     loop: { sameCall: 5, sameError: 3, compactions: 2, stepMinutes: 30, silenceMinutes: 5 },
@@ -173,6 +178,23 @@ export function validateConfig(raw: Record<string, unknown>): { config: Config; 
     const mode = isObj(raw.guard) ? raw.guard.mode : undefined;
     if (mode === 'enforce' || mode === 'shadow') config.guard.mode = mode;
     else bad('guard.mode');
+  }
+  if ('audit' in raw) {
+    if (isObj(raw.audit)) {
+      const a = raw.audit;
+      if ('level' in a) {
+        if (typeof a.level === 'string' && (AUDIT_LEVELS as readonly string[]).includes(a.level)) config.audit.level = a.level as AuditLevel;
+        else bad('audit.level');
+      }
+      if ('autoModel' in a) {
+        if (typeof a.autoModel === 'boolean') config.audit.autoModel = a.autoModel;
+        else bad('audit.autoModel');
+      }
+      if ('profile' in a) {
+        if (typeof a.profile === 'string' && SLUG_RE.test(a.profile)) config.audit.profile = a.profile;
+        else bad('audit.profile');
+      }
+    } else bad('audit');
   }
   if ('budget' in raw) {
     if (isObj(raw.budget)) {
@@ -339,7 +361,7 @@ export function patchConfig(path: string, patch: ConfigPatch): { ok: true } | { 
 export const saveLanguage = (path: string, language: Language): ReturnType<typeof patchConfig> => patchConfig(path, { language });
 
 /** Top-level entries the generic patch can change; anything else in a patch is ignored (and kept as written in the file). */
-const PATCHABLE = ['language', 'agents', 'guard', 'git', 'budget', 'models', 'plugins', 'notifications'] as const;
+const PATCHABLE = ['language', 'agents', 'guard', 'git', 'audit', 'budget', 'models', 'plugins', 'notifications'] as const;
 
 const leavesOf = (value: Record<string, unknown>, prefix: string, out: string[] = []): string[] => {
   for (const [key, v] of Object.entries(value)) {
